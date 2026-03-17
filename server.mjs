@@ -344,7 +344,7 @@ async function executeNavigationRun(task, persona, iteration) {
   let usedBlindWake = false;
 
   try {
-    browser = await playwright.chromium.launch({ headless: true });
+    browser = await playwright.chromium.launch({ headless: false });
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
     context.page = page;
     context.viewport = page.viewportSize();
@@ -775,8 +775,15 @@ async function inspectBlockingSurface(page) {
       text.includes("do not allow cookies") ||
       text.includes("cookie settings");
     const hasRestartButton = text.includes("restart");
+    const hasCanvas = document.querySelectorAll("canvas").length > 0;
+    const hasIframe = document.querySelectorAll("iframe").length > 0;
     const hasLoadingSurface =
-      (!hasRestartButton && onlyShortText.length < 80 && document.querySelectorAll("svg").length > 0 && document.querySelectorAll("button").length <= 2) ||
+      (!hasRestartButton &&
+        !hasCanvas &&
+        !hasIframe &&
+        onlyShortText.length < 80 &&
+        document.querySelectorAll("svg").length > 0 &&
+        document.querySelectorAll("button").length <= 2) ||
       text.includes("loading");
 
     if (hasLoginWall) {
