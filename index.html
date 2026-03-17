@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sinteticos Lab</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <p class="eyebrow">Synthetic Research Studio</p>
+          <h1>Sinteticos Lab</h1>
+          <p class="brand-copy">
+            Laboratorio local para explorar arquetipos, tareas, corridas y evidencia de validacion.
+          </p>
+        </div>
+
+        <nav class="nav-tabs" aria-label="Secciones">
+          <button class="nav-tab is-active" data-section="projects">Projects</button>
+          <button class="nav-tab" data-section="personas">Personas</button>
+          <button class="nav-tab" data-section="tasks">Tasks</button>
+          <button class="nav-tab" data-section="runs">Runs</button>
+          <button class="nav-tab" data-section="calibration">Calibration</button>
+          <button class="nav-tab" data-section="policy">Policy</button>
+        </nav>
+
+        <div class="sidebar-card">
+          <p class="sidebar-title">Modo</p>
+          <p class="sidebar-stat">Local-first</p>
+          <p class="sidebar-copy">
+            CRUD persistido en <code>localStorage</code>, corridas simuladas, heatmaps y scanpaths locales.
+          </p>
+        </div>
+      </aside>
+
+      <main class="main-content">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Research Workspace</p>
+            <h2 id="section-title">Dashboard</h2>
+          </div>
+          <div class="topbar-actions">
+            <button class="ghost-button" id="seed-demo">Recrear demo</button>
+            <button class="ghost-button" id="export-state">Exportar JSON</button>
+          </div>
+        </header>
+
+        <section class="section" id="section-dashboard">
+          <div id="dashboard-global-view">
+            <div class="hero-card">
+              <div>
+                <p class="eyebrow">Resumen global</p>
+                <h3>Proyectos del laboratorio</h3>
+                <p>
+                  Primero selecciona un proyecto para entrar a personas, tasks, runs y al dashboard detallado de ese contexto.
+                </p>
+              </div>
+              <div class="hero-meta" id="hero-meta-global"></div>
+            </div>
+
+            <div class="metrics-grid" id="global-metrics-grid"></div>
+
+            <article class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Projects overview</p>
+                  <h3>Selecciona un proyecto para continuar</h3>
+                </div>
+              </div>
+              <div class="stacked-list" id="dashboard-project-list"></div>
+            </article>
+          </div>
+
+          <div id="dashboard-project-view">
+            <div class="hero-card">
+              <div>
+                <p class="eyebrow">Dashboard del proyecto</p>
+                <h3>Observed, Inferred y Predictive separados con claridad</h3>
+                <p>
+                  El dashboard consolida task success, abandono, fricciones, consistencia del arquetipo y evidencia
+                  visual para el proyecto activo.
+                </p>
+              </div>
+              <div class="hero-meta" id="hero-meta"></div>
+            </div>
+
+            <div class="panel help-panel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Como leer los resultados</p>
+                  <h3>Capas del analisis</h3>
+                </div>
+              </div>
+              <div class="help-grid">
+                <article class="help-card">
+                  <div class="help-title-row">
+                    <strong>Observed</strong>
+                    <span class="info-dot" data-tooltip="Evidencia directa del run: clicks, screenshots, pasos y transiciones.">i</span>
+                  </div>
+                  <p>Es lo que realmente quedo registrado durante la corrida.</p>
+                </article>
+                <article class="help-card">
+                  <div class="help-title-row">
+                    <strong>Inferred</strong>
+                    <span class="info-dot" data-tooltip="Lectura analitica construida a partir de la evidencia observada.">i</span>
+                  </div>
+                  <p>Es la interpretacion del sistema sobre fricciones, confianza y abandono.</p>
+                </article>
+                <article class="help-card">
+                  <div class="help-title-row">
+                    <strong>Predictive</strong>
+                    <span class="info-dot" data-tooltip="Estimacion visual de atencion. No equivale a eye tracking real ni a evidencia observada.">i</span>
+                  </div>
+                  <p>Es una capa estimada para comparar saliencia visual con lo que realmente paso.</p>
+                </article>
+              </div>
+            </div>
+
+            <div class="metrics-grid" id="metrics-grid"></div>
+
+            <div class="panel-grid">
+              <article class="panel">
+                <div class="panel-header">
+                  <div>
+                    <p class="eyebrow">Task detail</p>
+                    <h3>Filtros activos</h3>
+                  </div>
+                </div>
+                <form class="filters-grid" id="dashboard-filters">
+                  <label>
+                    Persona
+                    <select name="personaId" id="filter-persona"></select>
+                  </label>
+                  <label>
+                    Task
+                    <select name="taskId" id="filter-task"></select>
+                  </label>
+                  <label>
+                    Outcome
+                    <select name="status" id="filter-status">
+                      <option value="all">Todas</option>
+                      <option value="completed">Completadas</option>
+                      <option value="abandoned">Abandonadas</option>
+                      <option value="uncertain">Inciertas</option>
+                      <option value="error">Error</option>
+                    </select>
+                  </label>
+                </form>
+                <div class="stacked-list" id="route-list"></div>
+              </article>
+
+              <article class="panel">
+                <div class="panel-header">
+                  <div>
+                    <p class="eyebrow">Observed</p>
+                    <h3>Heatmap agregado</h3>
+                  </div>
+                  <div class="pill-row">
+                    <span class="pill">Clicks reales del run</span>
+                    <span class="pill">No eye-tracking</span>
+                  </div>
+                </div>
+                <div class="visual-stage">
+                  <canvas id="aggregate-heatmap" width="360" height="640"></canvas>
+                </div>
+              </article>
+            </div>
+
+            <div class="panel-grid">
+              <article class="panel">
+                <div class="panel-header">
+                  <div>
+                    <p class="eyebrow">Observed</p>
+                    <h3>Scanpath agregado</h3>
+                  </div>
+                  <div class="pill-row">
+                    <span class="pill">Secuencia temporal</span>
+                    <span class="pill">Dwell approximado</span>
+                  </div>
+                </div>
+                <div class="visual-stage">
+                  <canvas id="aggregate-scanpath" width="360" height="640"></canvas>
+                </div>
+              </article>
+
+              <article class="panel">
+                <div class="panel-header">
+                  <div>
+                    <p class="eyebrow">Inferred</p>
+                    <h3>Hallazgos recurrentes</h3>
+                  </div>
+                </div>
+                <div class="stacked-list" id="finding-list"></div>
+              </article>
+            </div>
+          </div>
+        </section>
+
+        <section class="section is-active" id="section-projects">
+          <div class="section-grid">
+            <article class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Projects</p>
+                  <h3>Proyectos registrados</h3>
+                </div>
+              </div>
+              <div class="stacked-list" id="project-list"></div>
+            </article>
+
+            <article class="panel panel-form">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Project editor</p>
+                  <h3 id="project-form-title">Crear proyecto</h3>
+                </div>
+              </div>
+              <form id="project-form" class="form-grid">
+                <input type="hidden" name="id" />
+                <label>Nombre<input name="name" required /></label>
+                <label>Descripcion<textarea name="description" rows="4" placeholder="Contexto del proyecto"></textarea></label>
+                <div class="form-actions">
+                  <button type="submit">Guardar proyecto</button>
+                  <button type="button" class="ghost-button" id="project-reset">Limpiar</button>
+                </div>
+              </form>
+            </article>
+          </div>
+        </section>
+
+        <section class="section" id="section-personas">
+          <div class="section-grid">
+            <article class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">CRUD</p>
+                  <h3>Personas registradas</h3>
+                </div>
+              </div>
+              <div class="stacked-list" id="persona-list"></div>
+            </article>
+
+            <article class="panel panel-form">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Persona editor</p>
+                  <h3 id="persona-form-title">Crear persona</h3>
+                </div>
+              </div>
+              <form id="persona-form" class="form-grid">
+                <input type="hidden" name="id" />
+                <label>Nombre<input name="name" required /></label>
+                <label>Descripcion<textarea name="description" rows="2"></textarea></label>
+                <label>Rol<input name="role" required /></label>
+                <label>Segmento<input name="segment" required /></label>
+                <label>Contexto funcional<textarea name="functional_context" rows="2"></textarea></label>
+                <label>Contexto de uso<textarea name="usage_context" rows="2"></textarea></label>
+                <label>Metas<textarea name="goals" rows="2"></textarea></label>
+                <label>Motivaciones<textarea name="motivations" rows="2"></textarea></label>
+                <label>Necesidades<textarea name="needs" rows="2"></textarea></label>
+                <label>Comportamientos<textarea name="behaviors" rows="2"></textarea></label>
+                <label>Dolores<textarea name="pains" rows="2"></textarea></label>
+                <label>Frenos<textarea name="frictions" rows="2"></textarea></label>
+                <label>Rasgos de personalidad<textarea name="personality_traits" rows="2"></textarea></label>
+                <label>Entorno digital<textarea name="digital_environment" rows="2"></textarea></label>
+                <label>Comportamiento digital<textarea name="digital_behavior" rows="2"></textarea></label>
+                <label>Dispositivos<input name="devices" /></label>
+                <label>
+                  Nivel digital
+                  <select name="digital_level">
+                    <option value="low">Bajo</option>
+                    <option value="medium" selected>Intermedio</option>
+                    <option value="high">Alto</option>
+                  </select>
+                </label>
+                <label>Apps usadas<textarea name="apps_used" rows="2"></textarea></label>
+                <label>Restricciones<textarea name="restrictions" rows="2"></textarea></label>
+                <label>Adjuntos<textarea name="attachments" rows="2" placeholder="URLs o notas"></textarea></label>
+                <div class="form-actions">
+                  <button type="submit">Guardar persona</button>
+                  <button type="button" class="ghost-button" id="persona-reset">Limpiar</button>
+                </div>
+              </form>
+            </article>
+          </div>
+        </section>
+
+        <section class="section" id="section-tasks">
+          <div class="section-grid">
+            <article class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Tasks</p>
+                  <h3>Tareas registradas</h3>
+                </div>
+              </div>
+              <div class="stacked-list" id="task-list"></div>
+            </article>
+
+            <article class="panel panel-form">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Task editor</p>
+                  <h3 id="task-form-title">Crear task</h3>
+                </div>
+              </div>
+              <form id="task-form" class="form-grid">
+                <input type="hidden" name="id" />
+                <label>
+                  Persona base
+                  <select name="persona_id" id="task-persona-select" required></select>
+                </label>
+                <label>
+                  Tipo
+                  <select name="type" id="task-type">
+                    <option value="navigation">navigation</option>
+                    <option value="idea">idea</option>
+                  </select>
+                </label>
+                <label>Prompt / Objetivo<textarea name="prompt" rows="3" required></textarea></label>
+                <label>URL Figma o contexto<input name="url" placeholder="https://..." /></label>
+                <label>Criterio de exito<textarea name="success_criteria" rows="2"></textarea></label>
+                <label>Max steps<input type="number" min="2" max="12" name="max_steps" value="5" /></label>
+                <label class="checkbox-field">
+                  <input type="checkbox" name="mcp_enabled" />
+                  URL + MCP opcional
+                </label>
+                <label class="checkbox-field">
+                  <input type="checkbox" name="predictive_attention_enabled" />
+                  Predictive attention
+                </label>
+                <label class="checkbox-field">
+                  <input type="checkbox" name="artifacts_enabled" checked />
+                  Guardar artefactos
+                </label>
+                <div class="form-actions">
+                  <button type="submit">Guardar task</button>
+                  <button type="button" class="ghost-button" id="task-reset">Limpiar</button>
+                </div>
+              </form>
+            </article>
+          </div>
+
+          <article class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Runner</p>
+                <h3>Lanzar corridas</h3>
+              </div>
+            </div>
+            <form id="run-form" class="filters-grid">
+              <label>
+                Persona
+                <select name="personaId" id="run-persona"></select>
+              </label>
+              <label>
+                Task
+                <select name="taskId" id="run-task"></select>
+              </label>
+              <label>
+                Numero de runs
+                <input type="number" name="runCount" min="1" max="8" value="3" />
+              </label>
+              <button type="submit">Ejecutar simulacion</button>
+            </form>
+          </article>
+        </section>
+
+        <section class="section" id="section-runs">
+          <div class="section-grid">
+            <article class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Runs</p>
+                  <h3>Historial de ejecucion</h3>
+                </div>
+              </div>
+              <div class="stacked-list" id="run-list"></div>
+            </article>
+
+            <article class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Run detail</p>
+                  <h3 id="run-detail-title">Selecciona una corrida</h3>
+                </div>
+                <div class="pill-row">
+                  <button class="pill-button is-active" data-detail-view="observed" title="Evidencia real del run: screenshots, clicks, scanpath y pasos.">Observed</button>
+                  <button class="pill-button" data-detail-view="inferred" title="Interpretacion analitica del sistema basada en la evidencia observada.">Inferred</button>
+                  <button class="pill-button" data-detail-view="predictive" title="Estimacion visual de atencion. No es eye tracking real.">Predictive</button>
+                </div>
+              </div>
+              <div class="run-legend">
+                <span><strong>Observed:</strong> evidencia</span>
+                <span><strong>Inferred:</strong> interpretacion</span>
+                <span><strong>Predictive:</strong> prediccion</span>
+              </div>
+              <div id="run-detail"></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="section" id="section-calibration">
+          <div class="section-grid">
+            <article class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Calibration</p>
+                  <h3>Benchmarks humanos</h3>
+                </div>
+              </div>
+              <div class="stacked-list" id="calibration-list"></div>
+            </article>
+
+            <article class="panel panel-form">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Calibration editor</p>
+                  <h3>Registrar benchmark</h3>
+                </div>
+              </div>
+              <form id="calibration-form" class="form-grid">
+                <label>
+                  Persona
+                  <select name="persona_id" id="calibration-persona"></select>
+                </label>
+                <label>
+                  Task
+                  <select name="task_id" id="calibration-task"></select>
+                </label>
+                <label>Version del prototipo<input name="prototype_version" placeholder="v1.2" /></label>
+                <label>Resultado humano<textarea name="human_result" rows="2"></textarea></label>
+                <label>Resultado sintetico<textarea name="synthetic_result" rows="2"></textarea></label>
+                <label>Hallazgos criticos<textarea name="critical_findings" rows="2"></textarea></label>
+                <label>Coincidencia (%)<input type="number" name="agreement" min="0" max="100" value="68" /></label>
+                <label>Notas<textarea name="notes" rows="2"></textarea></label>
+                <div class="form-actions">
+                  <button type="submit">Guardar benchmark</button>
+                </div>
+              </form>
+            </article>
+          </div>
+        </section>
+
+        <section class="section" id="section-policy">
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Behavior policy</p>
+                <h3>Regla operativa del usuario sintetico</h3>
+              </div>
+            </div>
+            <div class="policy-layout">
+              <div class="policy-block">
+                <h4>Mandatorios</h4>
+                <ul id="policy-mandatory"></ul>
+              </div>
+              <div class="policy-block">
+                <h4>Exclusiones y cautela</h4>
+                <ul id="policy-guardrails"></ul>
+              </div>
+              <div class="policy-block">
+                <h4>Formula fuera de contexto</h4>
+                <blockquote>Lo siento, no tengo informacion sobre este tema.</blockquote>
+              </div>
+              <div class="policy-block">
+                <h4>Formula falta de informacion</h4>
+                <blockquote>No tengo suficiente informacion en mi perfil para responder eso con precision.</blockquote>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div class="modal-backdrop hidden" id="confirm-modal" aria-hidden="true">
+      <div class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title">
+        <div class="confirm-modal__header">
+          <p class="eyebrow">Confirmacion</p>
+          <h3 id="confirm-modal-title">Confirmar accion</h3>
+        </div>
+        <p class="confirm-modal__body" id="confirm-modal-body">
+          Esta accion necesita una confirmacion antes de continuar.
+        </p>
+        <div class="confirm-modal__actions">
+          <button class="ghost-button" type="button" id="confirm-modal-cancel">Cancelar</button>
+          <button class="danger-button" type="button" id="confirm-modal-confirm">Confirmar</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+  </html>
