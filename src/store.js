@@ -1,0 +1,26 @@
+let state = { projects: [], personas: [], tasks: [], runs: [], calibrations: [] };
+let runtime = { mode: "loading", runner: "unknown", backend: false, mcp: "optional" };
+let ui = {
+  section: "projects",
+  selectedProjectId: null,
+  selectedPersonaId: null,
+  selectedTaskId: null,
+  selectedRunId: null,
+  editingProjectId: null,
+  editingPersonaId: null,
+  editingTaskId: null,
+  confirmation: null,
+  runDetailView: "observed",
+  filters: {
+    personaId: "all",
+    taskId: "all",
+    status: "all"
+  }
+};
+
+export function getState() { return state; }
+export function setState(next) { state = next; }
+export function getRuntime() { return runtime; }
+export function setRuntime(next) { Object.assign(runtime, next); }
+export function getUi() { return ui; }
+export function setUi(next) { Object.assign(ui, next); }
