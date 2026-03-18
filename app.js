@@ -911,35 +911,43 @@
     document.getElementById("finding-list").innerHTML = html || emptyStateMarkup("Aun no hay hallazgos sintetizados.");
   }
 
-  function drawAggregateVisuals(runs) {
+  async function drawAggregateVisuals(runs) {
     const heatmapCanvas = document.getElementById("aggregate-heatmap");
     const scanpathCanvas = document.getElementById("aggregate-scanpath");
-    drawVisualChrome(heatmapCanvas.getContext("2d"), "Heatmap agregado");
-    drawVisualChrome(scanpathCanvas.getContext("2d"), "Scanpath agregado");
+    const firstScreenshot = runs.find((r) => r.screenshots && r.screenshots.length);
+    const screenshotSrc = firstScreenshot ? firstScreenshot.screenshots[0].src : null;
+    const img = await loadScreenshot(screenshotSrc);
+    drawBackground(heatmapCanvas.getContext("2d"), heatmapCanvas, img, "Heatmap agregado");
+    drawBackground(scanpathCanvas.getContext("2d"), scanpathCanvas, img, "Scanpath agregado");
 
     const clickPoints = runs.flatMap((run) => run.click_points || []);
     drawHeatPoints(heatmapCanvas.getContext("2d"), clickPoints);
     drawScanPoints(scanpathCanvas.getContext("2d"), clickPoints.slice(0, 18));
   }
 
-  function drawRunObserved(run) {
+  async function drawRunObserved(run) {
     const heatCanvas = document.getElementById("run-heatmap");
     const scanCanvas = document.getElementById("run-scanpath");
     if (!heatCanvas || !scanCanvas) {
       return;
     }
-    drawVisualChrome(heatCanvas.getContext("2d"), run.report_details.primary_screen || "Observed");
-    drawVisualChrome(scanCanvas.getContext("2d"), run.report_details.primary_screen || "Observed");
+    const screenshotSrc = run.screenshots && run.screenshots.length ? run.screenshots[0].src : null;
+    const img = await loadScreenshot(screenshotSrc);
+    const title = run.report_details.primary_screen || "Observed";
+    drawBackground(heatCanvas.getContext("2d"), heatCanvas, img, title);
+    drawBackground(scanCanvas.getContext("2d"), scanCanvas, img, title);
     drawHeatPoints(heatCanvas.getContext("2d"), run.click_points || []);
     drawScanPoints(scanCanvas.getContext("2d"), run.click_points || []);
   }
 
-  function drawPredictiveCanvas(run) {
+  async function drawPredictiveCanvas(run) {
     const predictiveCanvas = document.getElementById("run-predictive");
     if (!predictiveCanvas) {
       return;
     }
-    drawVisualChrome(predictiveCanvas.getContext("2d"), "Predictive attention");
+    const screenshotSrc = run.screenshots && run.screenshots.length ? run.screenshots[0].src : null;
+    const img = await loadScreenshot(screenshotSrc);
+    drawBackground(predictiveCanvas.getContext("2d"), predictiveCanvas, img, "Predictive attention");
     if (run.predicted_attention_maps && run.predicted_attention_maps.length) {
       drawHeatPoints(predictiveCanvas.getContext("2d"), run.predicted_attention_maps[0].points, true);
     }
@@ -1947,6 +1955,28 @@
       </svg>
     `;
     return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  }
+
+  function loadScreenshot(src) {
+    return new Promise((resolve) => {
+      if (!src) return resolve(null);
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+      img.src = src;
+    });
+  }
+
+  function drawBackground(ctx, canvas, img, title) {
+    if (img) {
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      ctx.drawImage(img, 0, 0);
+      ctx.fillStyle = "rgba(0,0,0,0.18)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    } else {
+      drawVisualChrome(ctx, title);
+    }
   }
 
   function drawVisualChrome(ctx, title) {

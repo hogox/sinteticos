@@ -8,7 +8,7 @@ import {
 } from "./figma-surface.mjs";
 
 export async function extendFigmaStartupWindow(page, task, deadline, timing) {
-  if (!task.url || !/figma\.com\/proto/i.test(task.url) || !timing.startupGraceMs) {
+  if (!task.url || !/figma\.com\/proto|embed\.figma\.com\/proto/i.test(task.url) || !timing.startupGraceMs) {
     return { kind: "skipped" };
   }
 
@@ -42,7 +42,7 @@ export async function extendFigmaStartupWindow(page, task, deadline, timing) {
 }
 
 export async function attemptBlindWakeSequence(page, task, deadline, timing) {
-  if (!timing.blindWakeEnabled || !task.url || !/figma\.com\/proto/i.test(task.url)) {
+  if (!timing.blindWakeEnabled || !task.url || !/figma\.com\/proto|embed\.figma\.com\/proto/i.test(task.url)) {
     return { kind: "skipped" };
   }
 
@@ -81,8 +81,60 @@ export async function getInteractionFrame(page, task = {}) {
   if (!page || isPageUnavailable(page)) {
     return inferCenteredMobileFrame(viewport);
   }
-  if (!task.url || !/figma\.com\/proto/i.test(task.url)) {
+  if (!task.url || !/figma\.com\/proto|embed\.figma\.com\/proto/i.test(task.url)) {
     return null;
+  }
+
+  // Tier 0: Figma canvas detection
+  // Figma renders prototypes into a <canvas> element. With scale-down + device-frame=0,
+  // the canvas may not fill the full viewport (e.g. 294x724 in a 390x844 viewport)
+  // but it's still the dominant visual element and the correct interaction target.
+  try {
+    const figmaCanvas = await page.evaluate(() => {
+      const canvases = Array.from(document.querySelectorAll("canvas"));
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      let best = null;
+      for (const c of canvases) {
+        const r = c.getBoundingClientRect();
+        const area = r.width * r.height;
+        const viewportArea = vw * vh;
+        if (r.left < 0 || r.left >= vw || r.top + r.height <= 0 || r.top >= vh) continue;
+        if (area > viewportArea * 0.4 && r.width >= 200 && r.height >= 400) {
+          if (!best || area > best.area) {
+            best = { left: Math.round(r.left), top: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height), area };
+          }
+        }
+      }
+      if (best) delete best.area;
+
+      // Detect Figma toolbar overlay at the top of the page
+      // This is the bar with logo, title, "Iniciar sesión" / "Crear cuenta" that appears
+      // even with hide-ui=1 or in embeds. Exclude it from the interaction frame.
+      let toolbarHeight = 0;
+      const divs = document.querySelectorAll("div");
+      for (const d of divs) {
+        const r = d.getBoundingClientRect();
+        if (r.top <= 2 && r.height > 30 && r.height < 60 && r.width > vw * 0.8) {
+          const btns = d.querySelectorAll("button, a");
+          if (btns.length >= 1) {
+            toolbarHeight = Math.round(r.height);
+            break;
+          }
+        }
+      }
+      if (best && toolbarHeight > 0 && best.top < toolbarHeight + 5) {
+        const originalTop = best.top;
+        best.top = toolbarHeight;
+        best.height -= (toolbarHeight - originalTop);
+      }
+
+      return best;
+    });
+    if (figmaCanvas) {
+      return { ...figmaCanvas, confidence: 0.85 };
+    }
+  } catch (error) {
   }
 
   const visualFrame = await detectVisualMobileFrame(page);

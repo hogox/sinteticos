@@ -1,3 +1,25 @@
+export function loadScreenshot(src) {
+  return new Promise((resolve) => {
+    if (!src) return resolve(null);
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+}
+
+export function drawBackground(ctx, canvas, img, title) {
+  if (img) {
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    ctx.drawImage(img, 0, 0);
+    ctx.fillStyle = "rgba(0,0,0,0.18)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  } else {
+    drawVisualChrome(ctx, title);
+  }
+}
+
 export function drawVisualChrome(ctx, title) {
   ctx.clearRect(0, 0, 360, 640);
   ctx.fillStyle = "#fdf8f1";

@@ -27,6 +27,9 @@ export async function prepareFigmaSurface(page) {
     "Allow all cookies",
     "Do not allow cookies",
     "Allow cookies",
+    "Permitir todas las cookies",
+    "No permitir cookies",
+    "Configuración de cookies",
     "Accept all",
     "Aceptar",
     "Aceptar todo",
@@ -48,11 +51,34 @@ export async function prepareFigmaSurface(page) {
     }
   }
 
+  // CSS fallback for cookie buttons that don't expose accessible names
   try {
-    await page.keyboard.press("Escape");
-    await page.waitForTimeout(250);
+    const cookieFallback = page.locator('button:has-text("cookies")').first();
+    if (await cookieFallback.count()) {
+      await cookieFallback.click({ timeout: 1200 });
+      await page.waitForTimeout(500);
+    }
   } catch (error) {
   }
+
+  // Search for cookie buttons inside iframes (Figma embeds)
+  try {
+    const cookieTargets = buttonTargets.slice(0, 6); // cookie-related labels only
+    const frames = page.frames();
+    for (const frame of frames) {
+      if (frame === page.mainFrame()) continue;
+      for (const label of cookieTargets) {
+        const btn = frame.getByRole("button", { name: new RegExp(escapeRegExp(label), "i") }).first();
+        if (await btn.count()) {
+          await btn.click({ timeout: 1200 });
+          await page.waitForTimeout(500);
+          return;
+        }
+      }
+    }
+  } catch (error) {
+  }
+
 }
 
 export async function settleFigmaSurface(page, deadline, timing = resolveNavigationTiming(), task = {}) {
@@ -124,7 +150,10 @@ export async function inspectBlockingSurface(page) {
     const hasCookieBanner =
       text.includes("allow all cookies") ||
       text.includes("do not allow cookies") ||
-      text.includes("cookie settings");
+      text.includes("cookie settings") ||
+      text.includes("permitir todas las cookies") ||
+      text.includes("no permitir cookies") ||
+      text.includes("configuración de cookies");
     const hasRestartButton = text.includes("restart");
     const hasCanvas = document.querySelectorAll("canvas").length > 0;
     const hasIframe = document.querySelectorAll("iframe").length > 0;
@@ -163,8 +192,8 @@ export async function buildBlockedRun(task, persona, startedAt, seed, runId, rng
   const screen = await safeGetScreenLabel(page, 1);
   const screenshots = [];
   const debugArtifacts = [];
-  await safeCaptureScreenshot(page, runDir, screenshots, screen, 1, runId);
   const interactionFrame = await getInteractionFrame(page, task);
+  await safeCaptureScreenshot(page, runDir, screenshots, screen, 1, runId, interactionFrame);
   const viewport = safeViewportSize(page);
   if (interactionFrame && viewport) {
     await writeFrameDebugArtifact(runDir, runId, screen, interactionFrame, debugArtifacts, viewport);

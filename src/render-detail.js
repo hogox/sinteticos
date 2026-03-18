@@ -1,4 +1,4 @@
-import { drawVisualChrome, drawHeatPoints, drawScanPoints } from "./canvas.js";
+import { drawVisualChrome, drawBackground, drawHeatPoints, drawScanPoints, loadScreenshot } from "./canvas.js";
 import { escapeHtml, severityToClass } from "./utils.js";
 
 export function observedDetailHtml(run) {
@@ -131,24 +131,29 @@ export function predictiveDetailHtml(run, task) {
   `;
 }
 
-export function drawRunObserved(run) {
+export async function drawRunObserved(run) {
   const heatCanvas = document.getElementById("run-heatmap");
   const scanCanvas = document.getElementById("run-scanpath");
   if (!heatCanvas || !scanCanvas) {
     return;
   }
-  drawVisualChrome(heatCanvas.getContext("2d"), run.report_details.primary_screen || "Observed");
-  drawVisualChrome(scanCanvas.getContext("2d"), run.report_details.primary_screen || "Observed");
+  const screenshotSrc = run.screenshots && run.screenshots.length ? run.screenshots[0].src : null;
+  const img = await loadScreenshot(screenshotSrc);
+  const title = run.report_details.primary_screen || "Observed";
+  drawBackground(heatCanvas.getContext("2d"), heatCanvas, img, title);
+  drawBackground(scanCanvas.getContext("2d"), scanCanvas, img, title);
   drawHeatPoints(heatCanvas.getContext("2d"), run.click_points || []);
   drawScanPoints(scanCanvas.getContext("2d"), run.click_points || []);
 }
 
-export function drawPredictiveCanvas(run) {
+export async function drawPredictiveCanvas(run) {
   const predictiveCanvas = document.getElementById("run-predictive");
   if (!predictiveCanvas) {
     return;
   }
-  drawVisualChrome(predictiveCanvas.getContext("2d"), "Predictive attention");
+  const screenshotSrc = run.screenshots && run.screenshots.length ? run.screenshots[0].src : null;
+  const img = await loadScreenshot(screenshotSrc);
+  drawBackground(predictiveCanvas.getContext("2d"), predictiveCanvas, img, "Predictive attention");
   if (run.predicted_attention_maps && run.predicted_attention_maps.length) {
     drawHeatPoints(predictiveCanvas.getContext("2d"), run.predicted_attention_maps[0].points, true);
   }

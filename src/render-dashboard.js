@@ -8,7 +8,7 @@ import {
   mostActiveProjectLabel
 } from "./utils.js";
 import { computeMetrics, getFilteredRuns, metricCard } from "./metrics.js";
-import { drawVisualChrome, drawHeatPoints, drawScanPoints } from "./canvas.js";
+import { drawVisualChrome, drawBackground, drawHeatPoints, drawScanPoints, loadScreenshot } from "./canvas.js";
 import { fillSelect } from "./forms.js";
 
 export function renderDashboard() {
@@ -153,11 +153,14 @@ export function renderFindingList(runs) {
   document.getElementById("finding-list").innerHTML = html || emptyStateMarkup("Aun no hay hallazgos sintetizados.");
 }
 
-export function drawAggregateVisuals(runs) {
+export async function drawAggregateVisuals(runs) {
   const heatmapCanvas = document.getElementById("aggregate-heatmap");
   const scanpathCanvas = document.getElementById("aggregate-scanpath");
-  drawVisualChrome(heatmapCanvas.getContext("2d"), "Heatmap agregado");
-  drawVisualChrome(scanpathCanvas.getContext("2d"), "Scanpath agregado");
+  const firstScreenshot = runs.find((r) => r.screenshots && r.screenshots.length);
+  const screenshotSrc = firstScreenshot ? firstScreenshot.screenshots[0].src : null;
+  const img = await loadScreenshot(screenshotSrc);
+  drawBackground(heatmapCanvas.getContext("2d"), heatmapCanvas, img, "Heatmap agregado");
+  drawBackground(scanpathCanvas.getContext("2d"), scanpathCanvas, img, "Scanpath agregado");
 
   const clickPoints = runs.flatMap((run) => run.click_points || []);
   drawHeatPoints(heatmapCanvas.getContext("2d"), clickPoints);

@@ -18,10 +18,14 @@ export async function getScreenLabel(page, step) {
   }, step);
 }
 
-export async function captureScreenshot(page, runDir, screenshots, screen, step, runId) {
+export async function captureScreenshot(page, runDir, screenshots, screen, step, runId, clip) {
   const filename = `step-${String(step).padStart(2, "0")}.png`;
   const absolutePath = path.join(runDir, filename);
-  await page.screenshot({ path: absolutePath, fullPage: false });
+  const opts = { path: absolutePath, fullPage: false };
+  if (clip && clip.confidence > 0.5 && clip.left >= 0 && clip.top >= 0) {
+    opts.clip = { x: clip.left, y: clip.top, width: clip.width, height: clip.height };
+  }
+  await page.screenshot(opts);
   screenshots.push({
     screen,
     step,
@@ -29,7 +33,7 @@ export async function captureScreenshot(page, runDir, screenshots, screen, step,
   });
 }
 
-export async function safeCaptureScreenshot(page, runDir, screenshots, screen, step, runId) {
+export async function safeCaptureScreenshot(page, runDir, screenshots, screen, step, runId, clip) {
   if (!page || isPageUnavailable(page)) {
     screenshots.push({
       screen,
@@ -39,7 +43,7 @@ export async function safeCaptureScreenshot(page, runDir, screenshots, screen, s
     return;
   }
   try {
-    await captureScreenshot(page, runDir, screenshots, screen, step, runId);
+    await captureScreenshot(page, runDir, screenshots, screen, step, runId, clip);
   } catch (error) {
     screenshots.push({
       screen,

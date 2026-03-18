@@ -28,6 +28,7 @@ import {
 } from "./figma-advanced.mjs";
 import { buildRecoveredErrorRun } from "./error-runs.mjs";
 import { simulateRun } from "../shared/simulation.js";
+import { isVisionAvailable, analyzeScreenWithVision, mapVisionCoordsToPage } from "./vision.mjs";
 
 export async function executeNavigationRun(task, persona, iteration, playwright) {
   if (!playwright) {
@@ -115,10 +116,16 @@ export async function executeNavigationRun(task, persona, iteration, playwright)
       context.interactionFrame = blindWake.frame || null;
     }
     context.interactionFrame = context.interactionFrame || (await getInteractionFrame(page, task));
+    const useVision = isVisionAvailable() && /figma\.com\/proto|embed\.figma\.com\/proto/i.test(task.url);
+    // Always clip screenshots to the interaction frame (prototype area only)
+    const previousActions = [];
+    if (useVision) {
+      console.log("[run] Vision mode enabled (model:", process.env.SINTETICOS_VISION_MODEL || "claude-haiku-4-5-20251001", ")");
+    }
     let previousFingerprint = await safeFingerprintPage(page);
     let currentScreen = await safeGetScreenLabel(page, 1);
     context.currentScreen = currentScreen;
-    await safeCaptureScreenshot(page, runDir, screenshots, currentScreen, 1, runId);
+    await safeCaptureScreenshot(page, runDir, screenshots, currentScreen, 1, runId, context.interactionFrame);
     if (context.interactionFrame) {
       await writeFrameDebugArtifact(runDir, runId, currentScreen, context.interactionFrame, debugArtifacts, page.viewportSize());
     }
@@ -135,7 +142,7 @@ export async function executeNavigationRun(task, persona, iteration, playwright)
           certainty: 22,
           timestamp: new Date().toISOString()
         });
-        await safeCaptureScreenshot(page, runDir, screenshots, currentScreen, step + 1, runId);
+        await safeCaptureScreenshot(page, runDir, screenshots, currentScreen, step + 1, runId, context.interactionFrame);
         break;
       }
 
@@ -151,7 +158,7 @@ export async function executeNavigationRun(task, persona, iteration, playwright)
           certainty: 26,
           timestamp: new Date().toISOString()
         });
-        await safeCaptureScreenshot(page, runDir, screenshots, currentScreen, step + 1, runId);
+        await safeCaptureScreenshot(page, runDir, screenshots, currentScreen, step + 1, runId, context.interactionFrame);
         break;
       }
       if (guardrailStatus.kind === "timeout") {
@@ -165,7 +172,7 @@ export async function executeNavigationRun(task, persona, iteration, playwright)
           certainty: 24,
           timestamp: new Date().toISOString()
         });
-        await safeCaptureScreenshot(page, runDir, screenshots, currentScreen, step + 1, runId);
+        await safeCaptureScreenshot(page, runDir, screenshots, currentScreen, step + 1, runId, context.interactionFrame);
         break;
       }
 
@@ -173,8 +180,51 @@ export async function executeNavigationRun(task, persona, iteration, playwright)
       if (activeFrame) {
         context.interactionFrame = activeFrame;
       }
-      const candidates = await collectCandidates(page, activeFrame);
-      const plan = chooseCandidate(candidates, task, persona, rng, step, activeFrame);
+
+      // --- Decision: vision or DOM candidates ---
+      let plan = null;
+
+      if (useVision) {
+        try {
+          const visionClip = activeFrame || context.interactionFrame;
+          const visionScreenshotOpts = { type: "png" };
+          if (visionClip && visionClip.confidence > 0.5 && visionClip.left >= 0) {
+            visionScreenshotOpts.clip = {
+              x: visionClip.left, y: visionClip.top,
+              width: visionClip.width, height: visionClip.height
+            };
+          }
+          const screenshotBuffer = await page.screenshot(visionScreenshotOpts);
+          const visionResult = await analyzeScreenWithVision(screenshotBuffer, {
+            task, persona, step, previousActions
+          });
+          if (visionResult) {
+            const pageCoords = mapVisionCoordsToPage(visionResult.x, visionResult.y, visionClip);
+            plan = {
+              type: "vision",
+              x: pageCoords.x,
+              y: pageCoords.y,
+              centerX: pageCoords.x,
+              centerY: pageCoords.y,
+              frameX: visionResult.x,
+              frameY: visionResult.y,
+              reason: visionResult.reason,
+              score: visionResult.certainty,
+              screenDescription: visionResult.screenDescription,
+              taskComplete: visionResult.taskComplete
+            };
+            previousActions.push(`Step ${step}: ${visionResult.reason} at (${visionResult.x}, ${visionResult.y})`);
+          }
+        } catch (visionError) {
+          console.error("[run] Vision error, falling back to DOM:", visionError.message);
+        }
+      }
+
+      if (!plan) {
+        const candidates = await collectCandidates(page, activeFrame);
+        plan = chooseCandidate(candidates, task, persona, rng, step, activeFrame);
+      }
+
       if (!plan) {
         completionStatus = "abandoned";
         stepLog.push({
@@ -188,19 +238,25 @@ export async function executeNavigationRun(task, persona, iteration, playwright)
         break;
       }
 
-      if (plan.type === "coordinate") {
-        await page.mouse.click(plan.x, plan.y);
-      } else {
-        await page.mouse.click(plan.centerX, plan.centerY);
-      }
+      // --- Click ---
+      await page.mouse.click(plan.centerX || plan.x, plan.centerY || plan.y);
 
       await page.waitForTimeout(Math.min(1200, timing.interactiveWaitMs));
       const nextFingerprint = await safeFingerprintPage(page);
-      const nextScreen = await safeGetScreenLabel(page, step + 1);
+      const nextScreen = plan.screenDescription || await safeGetScreenLabel(page, step + 1);
       const certainty = Math.max(40, Math.min(92, Math.round(plan.score || 64)));
+      const frameRef = activeFrame || context.interactionFrame;
       const point = {
-        x: Math.round(plan.centerX || plan.x),
-        y: Math.round(plan.centerY || plan.y),
+        x: plan.frameX != null
+          ? Math.round(plan.frameX)
+          : frameRef
+            ? Math.round((plan.centerX || plan.x) - frameRef.left)
+            : Math.round(plan.centerX || plan.x),
+        y: plan.frameY != null
+          ? Math.round(plan.frameY)
+          : frameRef
+            ? Math.round((plan.centerY || plan.y) - frameRef.top)
+            : Math.round(plan.centerY || plan.y),
         step,
         screen: currentScreen,
         certainty,
@@ -210,27 +266,34 @@ export async function executeNavigationRun(task, persona, iteration, playwright)
       stepLog.push({
         step,
         screen: currentScreen,
-        action: plan.type === "candidate" ? "click_text" : "click_region",
+        action: plan.type === "vision" ? "click_vision" : plan.type === "candidate" ? "click_text" : "click_region",
         reason: plan.reason,
         certainty,
         timestamp: new Date().toISOString()
       });
 
-      if (nextFingerprint !== previousFingerprint) {
+      const screenChanged = nextFingerprint !== previousFingerprint ||
+        (plan.type === "vision" && plan.screenDescription && plan.screenDescription !== currentScreen);
+      if (screenChanged) {
         screenTransitions.push({ from: currentScreen, to: nextScreen, step });
         currentScreen = nextScreen;
         context.currentScreen = currentScreen;
         previousFingerprint = nextFingerprint;
-      } else if (step >= 2) {
+      } else if (!useVision && step >= 2) {
         completionStatus = "abandoned";
         executionNotes = "La pantalla no cambio despues de intentos repetidos.";
-        await safeCaptureScreenshot(page, runDir, screenshots, currentScreen, step + 1, runId);
+        await safeCaptureScreenshot(page, runDir, screenshots, currentScreen, step + 1, runId, context.interactionFrame);
         break;
       }
 
-      await safeCaptureScreenshot(page, runDir, screenshots, currentScreen, step + 1, runId);
+      await safeCaptureScreenshot(page, runDir, screenshots, currentScreen, step + 1, runId, context.interactionFrame);
       if (context.interactionFrame) {
         await writeFrameDebugArtifact(runDir, runId, currentScreen, context.interactionFrame, debugArtifacts, page.viewportSize());
+      }
+
+      if (plan.taskComplete && certainty >= 60) {
+        completionStatus = "completed";
+        break;
       }
 
       if (step >= 2 && looksSuccessful(task, plan, nextScreen)) {
@@ -285,8 +348,10 @@ export async function executeNavigationRun(task, persona, iteration, playwright)
         ]
       },
       follow_up_questions: buildFollowUps(task, completionStatus),
-      engine: "playwright",
-      execution_notes: usedBlindWake ? `${executionNotes}` : executionNotes,
+      engine: useVision ? "playwright-vision" : "playwright",
+      execution_notes: useVision
+        ? "Navegacion real con Playwright + Claude Vision API para analisis de canvas."
+        : executionNotes,
       mcp_enabled: task.mcp_enabled,
       source: "server-playwright"
     };
