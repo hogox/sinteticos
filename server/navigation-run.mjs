@@ -84,7 +84,12 @@ export async function executeNavigationRun(task, persona, iteration, playwright)
     context.viewport = page.viewportSize();
     page.setDefaultTimeout(timing.pageActionTimeoutMs);
     page.setDefaultNavigationTimeout(timing.pageNavigationTimeoutMs);
-    await page.goto(task.url, { waitUntil: "domcontentloaded", timeout: timing.gotoTimeoutMs });
+    // Strip show-proto-sidebar from embed URLs to avoid layout disruption
+    let navUrl = task.url;
+    if (/embed\.figma\.com\/proto/i.test(navUrl)) {
+      navUrl = navUrl.replace(/[?&]show-proto-sidebar=\d/gi, "");
+    }
+    await page.goto(navUrl, { waitUntil: "domcontentloaded", timeout: timing.gotoTimeoutMs });
     await page.waitForTimeout(timing.initialWaitMs);
     let initialSurface = await settleFigmaSurface(page, deadline, timing, task);
     if (initialSurface.kind === "login-wall") {
@@ -117,12 +122,7 @@ export async function executeNavigationRun(task, persona, iteration, playwright)
       context.interactionFrame = blindWake.frame || null;
     }
     context.interactionFrame = context.interactionFrame || (await getInteractionFrame(page, task));
-    const rawFrame = context.interactionFrame ? { ...context.interactionFrame } : null;
     context.interactionFrame = await refineFrameByPixelAnalysis(page, context.interactionFrame);
-    const pixelTrim = rawFrame && context.interactionFrame ? {
-      topOffset: context.interactionFrame.top - rawFrame.top,
-      heightDelta: context.interactionFrame.height - rawFrame.height
-    } : null;
     const useVision = isVisionAvailable() && /figma\.com\/proto|embed\.figma\.com\/proto/i.test(task.url);
     // Always clip screenshots to the interaction frame (prototype area only)
     const previousActions = [];
@@ -183,15 +183,15 @@ export async function executeNavigationRun(task, persona, iteration, playwright)
         break;
       }
 
-      let activeFrame = (await getInteractionFrame(page, task)) || context.interactionFrame;
-      if (activeFrame && pixelTrim) {
-        activeFrame = {
-          ...activeFrame,
-          top: activeFrame.top + pixelTrim.topOffset,
-          height: activeFrame.height + pixelTrim.heightDelta
-        };
+      // Re-detect frame but only replace if quality is equal or better
+      const freshFrame = await getInteractionFrame(page, task);
+      let activeFrame = context.interactionFrame;
+      if (freshFrame && (!activeFrame || freshFrame.confidence >= activeFrame.confidence)) {
+        activeFrame = freshFrame;
       }
+      // Re-run pixel analysis on the selected frame each step (not stale delta)
       if (activeFrame) {
+        activeFrame = await refineFrameByPixelAnalysis(page, activeFrame);
         context.interactionFrame = activeFrame;
       }
 
@@ -202,7 +202,7 @@ export async function executeNavigationRun(task, persona, iteration, playwright)
         try {
           const visionClip = activeFrame || context.interactionFrame;
           const visionScreenshotOpts = { type: "png" };
-          if (visionClip && visionClip.confidence > 0.5 && visionClip.left >= 0) {
+          if (visionClip && visionClip.confidence > 0.3 && visionClip.left >= 0 && visionClip.width > 100 && visionClip.height > 200) {
             visionScreenshotOpts.clip = {
               x: visionClip.left, y: visionClip.top,
               width: visionClip.width, height: visionClip.height
@@ -262,14 +262,14 @@ export async function executeNavigationRun(task, persona, iteration, playwright)
       const frameRef = activeFrame || context.interactionFrame;
       const point = {
         x: plan.frameX != null
-          ? Math.round(plan.frameX)
+          ? Math.round(Math.max(0, Math.min(plan.frameX, frameRef ? frameRef.width : plan.frameX)))
           : frameRef
-            ? Math.round((plan.centerX || plan.x) - frameRef.left)
+            ? Math.round(Math.max(0, Math.min((plan.centerX || plan.x) - frameRef.left, frameRef.width)))
             : Math.round(plan.centerX || plan.x),
         y: plan.frameY != null
-          ? Math.round(plan.frameY)
+          ? Math.round(Math.max(0, Math.min(plan.frameY, frameRef ? frameRef.height : plan.frameY)))
           : frameRef
-            ? Math.round((plan.centerY || plan.y) - frameRef.top)
+            ? Math.round(Math.max(0, Math.min((plan.centerY || plan.y) - frameRef.top, frameRef.height)))
             : Math.round(plan.centerY || plan.y),
         step,
         screen: currentScreen,
