@@ -189,6 +189,87 @@ export async function getInteractionFrame(page, task = {}) {
   return detected || visualFrame || inferCenteredMobileFrame(viewport);
 }
 
+/**
+ * Refine a frame by analyzing screenshot pixels to crop out black bands.
+ * Takes a screenshot of the frame area, sends it to the browser to analyze,
+ * and returns an adjusted frame that excludes dark padding rows at top/bottom.
+ */
+export async function refineFrameByPixelAnalysis(page, frame) {
+  if (!frame || !page || isPageUnavailable(page)) return frame;
+  try {
+    const buf = await page.screenshot({
+      clip: { x: frame.left, y: frame.top, width: frame.width, height: frame.height },
+      type: "png"
+    });
+    const base64 = buf.toString("base64");
+    const bounds = await page.evaluate(async (dataUrl) => {
+      const img = new window.Image();
+      await new Promise((resolve) => { img.onload = resolve; img.onerror = resolve; img.src = dataUrl; });
+      if (!img.naturalWidth) return null;
+      const c = document.createElement("canvas");
+      c.width = img.naturalWidth;
+      c.height = img.naturalHeight;
+      const ctx = c.getContext("2d");
+      ctx.drawImage(img, 0, 0);
+      const data = ctx.getImageData(0, 0, c.width, c.height).data;
+      const w = c.width;
+      const h = c.height;
+      const threshold = 35;
+      const sampleStep = Math.max(1, Math.floor(w / 40));
+
+      let topY = 0;
+      for (let y = 0; y < h; y++) {
+        let dark = true;
+        for (let x = 0; x < w; x += sampleStep) {
+          const i = (y * w + x) * 4;
+          if (data[i] > threshold || data[i + 1] > threshold || data[i + 2] > threshold) {
+            dark = false;
+            break;
+          }
+        }
+        if (!dark) { topY = y; break; }
+      }
+
+      let bottomY = h;
+      for (let y = h - 1; y > topY; y--) {
+        let dark = true;
+        for (let x = 0; x < w; x += sampleStep) {
+          const i = (y * w + x) * 4;
+          if (data[i] > threshold || data[i + 1] > threshold || data[i + 2] > threshold) {
+            dark = false;
+            break;
+          }
+        }
+        if (!dark) { bottomY = y + 1; break; }
+      }
+
+      return { topY, bottomY };
+    }, `data:image/png;base64,${base64}`);
+
+    if (!bounds || bounds.topY >= bounds.bottomY) return frame;
+
+    const minPadding = 4;
+    const newTop = Math.max(0, bounds.topY - minPadding);
+    const newBottom = Math.min(frame.height, bounds.bottomY + minPadding);
+    const trimmed = newBottom - newTop;
+
+    if (trimmed < frame.height * 0.6) return frame;
+
+    const adjusted = {
+      left: frame.left,
+      top: frame.top + newTop,
+      width: frame.width,
+      height: trimmed,
+      confidence: frame.confidence
+    };
+    console.log(`[frame] Pixel analysis trimmed: top=${newTop}px bottom=${frame.height - newBottom}px → ${adjusted.width}x${adjusted.height}`);
+    return adjusted;
+  } catch (error) {
+    console.error("[frame] Pixel analysis failed:", error.message);
+    return frame;
+  }
+}
+
 export function inferCenteredMobileFrame(viewport) {
   if (!viewport) {
     return null;

@@ -23,6 +23,7 @@ import {
   extendFigmaStartupWindow,
   attemptBlindWakeSequence,
   getInteractionFrame,
+  refineFrameByPixelAnalysis,
   looksSuccessful,
   safeViewportSize
 } from "./figma-advanced.mjs";
@@ -116,6 +117,12 @@ export async function executeNavigationRun(task, persona, iteration, playwright)
       context.interactionFrame = blindWake.frame || null;
     }
     context.interactionFrame = context.interactionFrame || (await getInteractionFrame(page, task));
+    const rawFrame = context.interactionFrame ? { ...context.interactionFrame } : null;
+    context.interactionFrame = await refineFrameByPixelAnalysis(page, context.interactionFrame);
+    const pixelTrim = rawFrame && context.interactionFrame ? {
+      topOffset: context.interactionFrame.top - rawFrame.top,
+      heightDelta: context.interactionFrame.height - rawFrame.height
+    } : null;
     const useVision = isVisionAvailable() && /figma\.com\/proto|embed\.figma\.com\/proto/i.test(task.url);
     // Always clip screenshots to the interaction frame (prototype area only)
     const previousActions = [];
@@ -176,7 +183,14 @@ export async function executeNavigationRun(task, persona, iteration, playwright)
         break;
       }
 
-      const activeFrame = (await getInteractionFrame(page, task)) || context.interactionFrame;
+      let activeFrame = (await getInteractionFrame(page, task)) || context.interactionFrame;
+      if (activeFrame && pixelTrim) {
+        activeFrame = {
+          ...activeFrame,
+          top: activeFrame.top + pixelTrim.topOffset,
+          height: activeFrame.height + pixelTrim.heightDelta
+        };
+      }
       if (activeFrame) {
         context.interactionFrame = activeFrame;
       }
