@@ -153,16 +153,14 @@
     const personaCard = event.target.closest("[data-persona-id]");
     if (personaCard) {
       ui.selectedPersonaId = personaCard.dataset.personaId;
-      renderPersonas();
-      renderDashboard();
+      render();
       return;
     }
 
     const taskCard = event.target.closest("[data-task-id]");
     if (taskCard) {
       ui.selectedTaskId = taskCard.dataset.taskId;
-      renderTasks();
-      renderDashboard();
+      render();
       return;
     }
 
@@ -532,8 +530,9 @@
       return;
     }
     const engine = runtime.backend ? `backend · ${runtime.runner}` : "browser fallback";
+    const mcpLabel = runtime.figma_mcp ? "Figma MCP ready" : `MCP ${runtime.mcp}`;
     const project = getProjectById(ui.selectedProjectId);
-    badge.textContent = project ? `${project.name} · ${engine} · MCP ${runtime.mcp}` : `${engine} · MCP ${runtime.mcp}`;
+    badge.textContent = project ? `${project.name} · ${engine} · ${mcpLabel}` : `${engine} · ${mcpLabel}`;
   }
 
   function renderPolicy() {
@@ -694,7 +693,7 @@
               <span class="pill">seed ${run.seed}</span>
               <span class="pill">${run.persona_version}</span>
               <span class="pill">${formatShortDate(run.started_at)}</span>
-              <span class="pill">${escapeHtml(run.engine || "simulated")}</span>
+              <span class="pill${run.engine === "figma-mcp" ? " engine-figma-mcp" : ""}">${escapeHtml(run.engine || "simulated")}</span>
             </div>
             <p>${escapeHtml(run.report_summary)}</p>
             <div class="action-row">
@@ -1260,14 +1259,18 @@
     if (ui.selectedProjectId && !getProjectById(ui.selectedProjectId)) {
       ui.selectedProjectId = null;
     }
-    if (!ui.selectedPersonaId || !getPersonaById(ui.selectedPersonaId) || getPersonaById(ui.selectedPersonaId)?.project_id !== ui.selectedProjectId) {
-      ui.selectedPersonaId = state.personas.find((item) => item.project_id === ui.selectedProjectId)?.id || null;
+    const projectId = ui.selectedProjectId;
+    const selectedPersona = ui.selectedPersonaId ? getPersonaById(ui.selectedPersonaId) : null;
+    if (!selectedPersona || selectedPersona.project_id !== projectId) {
+      ui.selectedPersonaId = state.personas.find((item) => item.project_id === projectId)?.id || null;
     }
-    if (!ui.selectedTaskId || !getTaskById(ui.selectedTaskId) || getTaskById(ui.selectedTaskId)?.project_id !== ui.selectedProjectId) {
-      ui.selectedTaskId = state.tasks.find((item) => item.project_id === ui.selectedProjectId)?.id || null;
+    const selectedTask = ui.selectedTaskId ? getTaskById(ui.selectedTaskId) : null;
+    if (!selectedTask || selectedTask.project_id !== projectId) {
+      ui.selectedTaskId = state.tasks.find((item) => item.project_id === projectId)?.id || null;
     }
-    if (!ui.selectedRunId || !getRunById(ui.selectedRunId) || getRunById(ui.selectedRunId)?.project_id !== ui.selectedProjectId) {
-      ui.selectedRunId = state.runs.find((item) => item.project_id === ui.selectedProjectId)?.id || null;
+    const selectedRun = ui.selectedRunId ? getRunById(ui.selectedRunId) : null;
+    if (!selectedRun || selectedRun.project_id !== projectId) {
+      ui.selectedRunId = state.runs.find((item) => item.project_id === projectId)?.id || null;
     }
   }
 
@@ -1284,10 +1287,11 @@
             mode: "backend",
             backend: true,
             runner: payload.runner || "simulated",
-            mcp: payload.mcp || "optional"
+            mcp: payload.mcp || "optional",
+            figma_mcp: payload.figma_mcp || false
           };
         } catch (error) {
-          return { mode: "browser", backend: false, runner: "simulated", mcp: "optional" };
+          return { mode: "browser", backend: false, runner: "simulated", mcp: "optional", figma_mcp: false };
         }
       },
 
