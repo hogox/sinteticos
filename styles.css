@@ -370,6 +370,11 @@ select {
   color: #191919;
 }
 
+.pill.engine-figma-mcp {
+  background: rgba(162, 89, 255, 0.14);
+  color: #6b3fa0;
+}
+
 .pill-button {
   background: transparent;
   box-shadow: none;

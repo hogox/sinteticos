@@ -2,6 +2,8 @@ import { simulateRun } from "../shared/simulation.js";
 import { uid } from "./utils.mjs";
 import { executeNavigationRun } from "./navigation-run.mjs";
 import { buildErrorRun } from "./error-runs.mjs";
+import { executeMcpNavigationRun } from "./figma-mcp-run.mjs";
+import { parseFigmaPrototypeUrl } from "../figma-mcp-client.mjs";
 
 let playwrightModulePromise;
 
@@ -15,6 +17,11 @@ export async function getPlaywright() {
 export async function executeRun(task, persona, iteration) {
   if (task.type === "navigation" && task.url) {
     const playwright = await getPlaywright();
+    const figmaInfo = parseFigmaPrototypeUrl(task.url);
+    const figmaToken = process.env.FIGMA_ACCESS_TOKEN || "";
+    if (figmaInfo && task.mcp_enabled && figmaToken) {
+      return executeMcpNavigationRun(task, persona, iteration, figmaToken, playwright);
+    }
     return executeNavigationRun(task, persona, iteration, playwright);
   }
   return simulateRun(task, persona, iteration, {

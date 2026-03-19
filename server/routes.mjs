@@ -1,5 +1,6 @@
 import path from "node:path";
 import { PROJECT_ROOT } from "./config.mjs";
+import { checkFigmaAvailability } from "../figma-mcp-client.mjs";
 
 export function createRouteHandler(deps) {
   const { readState, writeState, readJson, serveFile, sendJson, uid, safeExecuteRun, getPlaywright, buildInitialState } = deps;
@@ -10,10 +11,13 @@ export function createRouteHandler(deps) {
 
       if (url.pathname === "/api/health" && req.method === "GET") {
         const playwright = await getPlaywright();
+        const figmaToken = process.env.FIGMA_ACCESS_TOKEN || "";
+        const figmaAvailable = figmaToken ? await checkFigmaAvailability(figmaToken) : false;
         return sendJson(res, 200, {
           ok: true,
           runner: playwright ? "playwright-ready" : "simulated-fallback",
-          mcp: "optional"
+          mcp: figmaAvailable ? "figma-mcp-ready" : "optional",
+          figma_mcp: figmaAvailable
         });
       }
 

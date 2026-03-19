@@ -48,10 +48,11 @@ function createApi() {
           mode: "backend",
           backend: true,
           runner: payload.runner || "simulated",
-          mcp: payload.mcp || "optional"
+          mcp: payload.mcp || "optional",
+          figma_mcp: payload.figma_mcp || false
         };
       } catch (error) {
-        return { mode: "browser", backend: false, runner: "simulated", mcp: "optional" };
+        return { mode: "browser", backend: false, runner: "simulated", mcp: "optional", figma_mcp: false };
       }
     },
 

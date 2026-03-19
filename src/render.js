@@ -47,7 +47,8 @@ export function renderRuntimeBadge() {
   }
   const engine = runtime.backend ? `backend · ${runtime.runner}` : "browser fallback";
   const project = getProjectById(ui.selectedProjectId, state);
-  badge.textContent = project ? `${project.name} · ${engine} · MCP ${runtime.mcp}` : `${engine} · MCP ${runtime.mcp}`;
+  const mcpLabel = runtime.figma_mcp ? "Figma MCP ready" : `MCP ${runtime.mcp}`;
+  badge.textContent = project ? `${project.name} · ${engine} · ${mcpLabel}` : `${engine} · ${mcpLabel}`;
 }
 
 export function createRuntimeBadge() {
