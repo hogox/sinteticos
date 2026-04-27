@@ -477,6 +477,12 @@ select {
   border: 1px solid var(--line);
 }
 
+.visual-stage canvas {
+  max-width: 100%;
+  height: auto;
+  border-radius: 18px;
+}
+
 canvas {
   width: 360px;
   height: 640px;

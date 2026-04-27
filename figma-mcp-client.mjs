@@ -380,7 +380,7 @@ export async function getFrameScreenshot(fileKey, nodeId, accessToken, runDir, r
  * @param {number} frameHeight - Alto del frame en Figma (ej. 812)
  * @param {number} [targetWidth=360] - Ancho del canvas de visualizacion
  * @param {number} [targetHeight=640] - Alto del canvas de visualizacion
- * @returns {Array<{ text: string, isRestart: boolean, tag: string, x: number, y: number, width: number, height: number, centerX: number, centerY: number, transitionNodeID: string|null, hasTransition: boolean }>}
+ * @returns {Array<{ text: string, isRestart: boolean, tag: string, x: number, y: number, width: number, height: number, centerX: number, centerY: number, transitionNodeID: string|null }>}
  */
 export function nodesToCandidates(nodes, frameWidth, frameHeight, targetWidth = DEFAULT_TARGET_WIDTH, targetHeight = DEFAULT_TARGET_HEIGHT) {
   if (!nodes || !nodes.length) return [];
