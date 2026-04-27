@@ -416,7 +416,8 @@ export function nodesToCandidates(nodes, frameWidth, frameHeight, targetWidth = 
         height: Math.round(scaledH),
         centerX: Math.round(scaledX + scaledW / 2),
         centerY: Math.round(scaledY + scaledH / 2),
-        transitionNodeID: node.transitionNodeID || null
+        transitionNodeID: node.transitionNodeID || null,
+        hasTransition: !!node.transitionNodeID
       };
     })
     .filter(Boolean)
@@ -536,7 +537,43 @@ export function findTransitionTarget(nodes, chosenPlan, frameWidth, frameHeight,
     return bestMatch.transitionNodeID;
   }
 
+  // Fallback: si el candidato elegido no tenia transicion, buscar el nodo
+  // con transicion mas cercano como segunda oportunidad
+  if (!bestMatch || bestDistance > proximityThreshold) {
+    const nodesWithTransitions = nodes.filter((n) => n.transitionNodeID);
+    if (nodesWithTransitions.length > 0) {
+      let fallbackNode = null;
+      let fallbackDist = Infinity;
+      for (const node of nodesWithTransitions) {
+        const cx = (node.x + node.width / 2) * scaleX;
+        const cy = (node.y + node.height / 2) * scaleY;
+        const d = Math.sqrt((planX - cx) ** 2 + (planY - cy) ** 2);
+        if (d < fallbackDist) { fallbackDist = d; fallbackNode = node; }
+      }
+      if (fallbackNode && fallbackDist <= proximityThreshold * 2.5) {
+        return { targetId: fallbackNode.transitionNodeID, fallback: true };
+      }
+    }
+  }
+
   return null;
+}
+
+/**
+ * Construye un grafo de transiciones a partir de los nodos de un frame.
+ * @param {FigmaNode[]} nodes
+ * @returns {{ totalNodes: number, connectedNodes: number, transitions: Map<string, string> }}
+ */
+export function buildTransitionGraph(nodes) {
+  const transitions = new Map();
+  let connectedNodes = 0;
+  for (const node of (nodes || [])) {
+    if (node.transitionNodeID) {
+      transitions.set(node.id || node.name, node.transitionNodeID);
+      connectedNodes += 1;
+    }
+  }
+  return { totalNodes: (nodes || []).length, connectedNodes, transitions };
 }
 
 // ---------------------------------------------------------------------------

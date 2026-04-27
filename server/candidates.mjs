@@ -1,5 +1,26 @@
 import { tokenize } from "./utils.mjs";
 
+function extractPersonaBiases(persona) {
+  const behaviorText = `${persona.digital_behavior || ""} ${persona.behaviors || ""} ${persona.personality_traits || ""}`;
+  const speedProfile = /r[aá]pid|impaciente|decide r[aá]pid|eficiente|directo/i.test(behaviorText)
+    ? "fast"
+    : /compara|explora|detall|analiz|investig/i.test(behaviorText)
+      ? "explorer"
+      : "neutral";
+  const explorationTendency = /explora poco|directo|r[aá]pid/i.test(behaviorText)
+    ? "direct"
+    : /compara|explora|navega/i.test(behaviorText)
+      ? "exploratory"
+      : "neutral";
+  return {
+    speedProfile,
+    explorationTendency,
+    frictionKeywords: tokenize(`${persona.frictions || ""} ${persona.pains || ""}`),
+    goalTokens: tokenize(persona.goals || ""),
+    isMobile: /mobile|m[oó]vil|celular/i.test(persona.devices || "")
+  };
+}
+
 export async function collectCandidates(page, interactionFrame = null) {
   return page.evaluate((frame) => {
     const selectors = ["a", "button", "[role='button']", "[tabindex='0']", "[data-testid]"];
@@ -70,6 +91,8 @@ export function chooseCandidate(candidates, task, persona, rng, step, interactio
   }
 
   const tokens = tokenize(`${task.prompt} ${task.success_criteria}`);
+  const biases = extractPersonaBiases(persona);
+
   const scored = candidates
     .map((candidate) => {
       const textTokens = tokenize(candidate.text);
@@ -80,7 +103,31 @@ export function chooseCandidate(candidates, task, persona, rng, step, interactio
       const noisePenalty = /(cookies?|sign up|log in|login|register)/i.test(candidate.text) && !/(allow all cookies|do not allow cookies)/i.test(candidate.text) ? 18 : 0;
       const restartPenalty = candidate.isRestart ? 24 : 0;
       const shortLabelBias = candidate.text && candidate.text.length <= 28 ? 8 : 0;
-      const score = 40 + textOverlap * 14 + ctaBias + clarityBias + cookieBias + shortLabelBias - noisePenalty - restartPenalty - step * 2;
+
+      // P1-A: persona-aware biases
+      const isCta = /comprar|reservar|continuar|siguiente|confirmar|book|buy|checkout/i.test(candidate.text || "");
+      const isExploration = /ver m[aá]s|detalle|opciones|comparar|explorar|more|details/i.test(candidate.text || "");
+      const isSecondaryNav = /men[uú]|categor|filtro|buscar|search|filter/i.test(candidate.text || "");
+      const speedBias = biases.speedProfile === "fast"
+        ? (isCta ? 10 : isExploration ? -8 : 0)
+        : biases.speedProfile === "explorer"
+          ? (isExploration ? 10 : isCta ? -6 : 0)
+          : 0;
+      const frictionText = `${candidate.text || ""} ${candidate.tag || ""}`.toLowerCase();
+      const frictionBias = biases.frictionKeywords.some((kw) => frictionText.includes(kw)) ? -10 : 0;
+      const goalBias = Math.min(14, biases.goalTokens.filter((t) => textTokens.includes(t)).length * 7);
+      const area = (candidate.width || 0) * (candidate.height || 0);
+      const mobileBias = biases.isMobile ? (area >= 2000 ? 8 : area < 600 && area > 0 ? -6 : 0) : 0;
+      const explorationBias = biases.explorationTendency === "direct"
+        ? (isSecondaryNav ? -6 : 0)
+        : biases.explorationTendency === "exploratory"
+          ? (isSecondaryNav ? 8 : 0)
+          : 0;
+      const transitionBias = candidate.hasTransition ? 16 : -4;
+
+      const score = 40 + textOverlap * 14 + ctaBias + clarityBias + cookieBias + shortLabelBias
+        + speedBias + frictionBias + goalBias + mobileBias + explorationBias + transitionBias
+        - noisePenalty - restartPenalty - step * 2;
       return { ...candidate, score };
     })
     .sort((a, b) => b.score - a.score);
