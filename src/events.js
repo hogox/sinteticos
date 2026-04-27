@@ -14,7 +14,7 @@ import { render } from "./render.js";
 import { renderRuns, renderPersonas, renderTasks } from "./render-entities.js";
 import { renderDashboard } from "./render-dashboard.js";
 import { resetProjectForm, resetPersonaForm, resetTaskForm } from "./forms.js";
-import { closeConfirmation } from "./confirmation.js";
+import { closeConfirmation, closeErrorModal } from "./confirmation.js";
 import { ensureSelection } from "./state-ops.js";
 import { exportState, resetDemoData } from "./export.js";
 
@@ -34,14 +34,17 @@ export function bindEvents() {
   document.getElementById("confirm-modal-cancel").addEventListener("click", () => closeConfirmation(false));
   document.getElementById("confirm-modal-confirm").addEventListener("click", () => closeConfirmation(true));
   document.getElementById("confirm-modal").addEventListener("click", (event) => {
-    if (event.target.id === "confirm-modal") {
-      closeConfirmation(false);
-    }
+    if (event.target.id === "confirm-modal") closeConfirmation(false);
+  });
+  document.getElementById("error-modal-close").addEventListener("click", closeErrorModal);
+  document.getElementById("error-modal").addEventListener("click", (event) => {
+    if (event.target.id === "error-modal") closeErrorModal();
   });
   window.addEventListener("keydown", (event) => {
     const ui = getUi();
-    if (event.key === "Escape" && ui.confirmation) {
-      closeConfirmation(false);
+    if (event.key === "Escape") {
+      if (ui.confirmation) closeConfirmation(false);
+      else closeErrorModal();
     }
   });
 }
