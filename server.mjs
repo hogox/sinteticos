@@ -12,6 +12,7 @@ import {
   nodesToCandidates,
   findTransitionTarget,
   enrichWithTransitions,
+  buildTransitionGraph,
   checkFigmaAvailability
 } from "./figma-mcp-client.mjs";
 
@@ -498,6 +499,8 @@ async function executeNavigationRun(task, persona, iteration) {
         action: plan.type === "candidate" ? "click_text" : "click_region",
         reason: plan.reason,
         certainty,
+        candidateCount: plan.candidateCount ?? candidates.length,
+        connectedCount: candidates.filter((c) => c.hasTransition).length,
         timestamp: new Date().toISOString()
       });
 
@@ -518,9 +521,13 @@ async function executeNavigationRun(task, persona, iteration) {
         await writeFrameDebugArtifact(runDir, runId, currentScreen, context.interactionFrame, debugArtifacts, page.viewportSize());
       }
 
-      if (step >= 2 && looksSuccessful(task, plan, nextScreen)) {
-        completionStatus = "completed";
-        break;
+      if (step >= 2) {
+        const successResult = looksSuccessful(task, plan, nextScreen);
+        if (successResult.success) {
+          if (stepLog.length > 0) stepLog[stepLog.length - 1].successConfidence = successResult.confidence;
+          completionStatus = "completed";
+          break;
+        }
       }
 
       if (step === (task.max_steps || 5)) {
@@ -528,7 +535,7 @@ async function executeNavigationRun(task, persona, iteration) {
       }
     }
 
-    const findings = buildFindings(task, persona, completionStatus, rng);
+    const findings = buildFindings(task, persona, completionStatus, rng, stepLog, clickPoints, screenTransitions);
     const endedAt = new Date();
     return {
       id: runId,
@@ -541,7 +548,7 @@ async function executeNavigationRun(task, persona, iteration) {
       started_at: startedAt.toISOString(),
       ended_at: endedAt.toISOString(),
       completion_status: completionStatus,
-      persona_response: composePersonaResponse(persona, task, completionStatus, findings, stepLog.length || 1),
+      persona_response: composePersonaResponse(persona, task, completionStatus, findings, stepLog.length || 1, stepLog),
       step_log: stepLog,
       click_points: clickPoints,
       screen_transitions: screenTransitions,
@@ -673,14 +680,25 @@ async function executeMcpNavigationRun(task, persona, iteration, figmaInfo, acce
         action: plan.type === "candidate" ? "click_text" : "click_region",
         reason: plan.reason,
         certainty,
+        candidateCount: plan.candidateCount ?? candidates.length,
+        connectedCount: candidates.filter((c) => c.hasTransition).length,
         timestamp: new Date().toISOString()
       });
 
-      // Buscar transicion
-      const nextNodeId = findTransitionTarget(
+      // Buscar transicion (puede retornar string, { targetId, fallback } o null)
+      const transitionResult = findTransitionTarget(
         frameData.nodes, plan,
         frameData.frameWidth, frameData.frameHeight
       );
+      const nextNodeId = typeof transitionResult === "string"
+        ? transitionResult
+        : transitionResult && transitionResult.targetId
+          ? transitionResult.targetId
+          : null;
+      const usedFallback = transitionResult && transitionResult.fallback;
+      if (usedFallback && stepLog.length > 0) {
+        stepLog[stepLog.length - 1].navigationFallback = true;
+      }
 
       if (nextNodeId && nextNodeId !== currentNodeId) {
         const nextFrameData = await getFrameNodes(fileKey, nextNodeId, accessToken);
@@ -701,16 +719,40 @@ async function executeMcpNavigationRun(task, persona, iteration, figmaInfo, acce
             screenshots.push(stepScreenshot);
           }
         }
-      } else if (step >= 2 && !nextNodeId) {
-        // Sin transicion y sin cambio — posiblemente el flujo termino
-        completionStatus = "uncertain";
-        executionNotes += " No se encontraron mas transiciones a partir del paso " + step + ".";
-        break;
+      } else if (!nextNodeId) {
+        // Intentar candidato alternativo con transicion antes de terminar
+        const altCandidate = candidates.find((c) => c.hasTransition && c !== plan);
+        if (altCandidate) {
+          if (stepLog.length > 0) stepLog[stepLog.length - 1].retried = true;
+          // Probar transicion del candidato alternativo
+          const altResult = findTransitionTarget(frameData.nodes, altCandidate, frameData.frameWidth, frameData.frameHeight);
+          const altNodeId = typeof altResult === "string" ? altResult : altResult && altResult.targetId ? altResult.targetId : null;
+          if (altNodeId && altNodeId !== currentNodeId) {
+            const altFrameData = await getFrameNodes(fileKey, altNodeId, accessToken);
+            if (altFrameData && altFrameData.nodes.length) {
+              const altScreen = altFrameData.frameName || `Frame ${altNodeId}`;
+              screenTransitions.push({ from: currentScreen, to: altScreen, step });
+              currentScreen = altScreen;
+              currentNodeId = altNodeId;
+              altFrameData.nodes = await enrichWithTransitions(altFrameData.nodes, fileKey, accessToken);
+              frameData = altFrameData;
+            }
+          }
+        }
+        if (currentNodeId === (startingPointNodeId || nodeId) && step >= 2) {
+          completionStatus = "uncertain";
+          executionNotes += " No se encontraron mas transiciones a partir del paso " + step + ".";
+          break;
+        }
       }
 
-      if (step >= 2 && looksSuccessful(task, plan, currentScreen)) {
-        completionStatus = "completed";
-        break;
+      if (step >= 2) {
+        const successResult = looksSuccessful(task, plan, currentScreen);
+        if (successResult.success) {
+          if (stepLog.length > 0) stepLog[stepLog.length - 1].successConfidence = successResult.confidence;
+          completionStatus = "completed";
+          break;
+        }
       }
 
       if (step === (task.max_steps || 5)) {
@@ -718,7 +760,7 @@ async function executeMcpNavigationRun(task, persona, iteration, figmaInfo, acce
       }
     }
 
-    const findings = buildFindings(task, persona, completionStatus, rng);
+    const findings = buildFindings(task, persona, completionStatus, rng, stepLog, clickPoints, screenTransitions);
     const endedAt = new Date();
     return {
       id: runId,
@@ -731,7 +773,7 @@ async function executeMcpNavigationRun(task, persona, iteration, figmaInfo, acce
       started_at: startedAt.toISOString(),
       ended_at: endedAt.toISOString(),
       completion_status: completionStatus,
-      persona_response: composePersonaResponse(persona, task, completionStatus, findings, stepLog.length || 1),
+      persona_response: composePersonaResponse(persona, task, completionStatus, findings, stepLog.length || 1, stepLog),
       step_log: stepLog,
       click_points: clickPoints,
       screen_transitions: screenTransitions,
@@ -756,7 +798,16 @@ async function executeMcpNavigationRun(task, persona, iteration, figmaInfo, acce
         rejection_signals: [
           "Transiciones limitadas al primer destino por nodo (limitacion REST API)",
           "Sin interactividad real del prototipo (analisis estructural)"
-        ]
+        ],
+        prototype_coverage: {
+          total_interactive_nodes: stepLog.reduce((sum, s) => sum + (s.candidateCount || 0), 0),
+          nodes_with_transitions: stepLog.reduce((sum, s) => sum + (s.connectedCount || 0), 0),
+          coverage_ratio: (() => {
+            const total = stepLog.reduce((sum, s) => sum + (s.candidateCount || 0), 0);
+            const connected = stepLog.reduce((sum, s) => sum + (s.connectedCount || 0), 0);
+            return total > 0 ? Math.round((connected / total) * 100) / 100 : 1;
+          })()
+        }
       },
       follow_up_questions: buildFollowUps(task, completionStatus),
       engine: "figma-mcp",
@@ -835,6 +886,27 @@ async function collectCandidates(page, interactionFrame = null) {
   }, interactionFrame);
 }
 
+function extractPersonaBiases(persona) {
+  const behaviorText = `${persona.digital_behavior || ""} ${persona.behaviors || ""} ${persona.personality_traits || ""}`;
+  const speedProfile = /r[aá]pid|impaciente|decide r[aá]pid|eficiente|directo/i.test(behaviorText)
+    ? "fast"
+    : /compara|explora|detall|analiz|investig/i.test(behaviorText)
+      ? "explorer"
+      : "neutral";
+  const explorationTendency = /explora poco|directo|r[aá]pid/i.test(behaviorText)
+    ? "direct"
+    : /compara|explora|navega/i.test(behaviorText)
+      ? "exploratory"
+      : "neutral";
+  return {
+    speedProfile,
+    explorationTendency,
+    frictionKeywords: tokenize(`${persona.frictions || ""} ${persona.pains || ""}`),
+    goalTokens: tokenize(persona.goals || ""),
+    isMobile: /mobile|m[oó]vil|celular/i.test(persona.devices || "")
+  };
+}
+
 function chooseCandidate(candidates, task, persona, rng, step, interactionFrame = null) {
   if (!candidates.length) {
     const fallback = resolveFrameFallbackPoint(interactionFrame, step);
@@ -847,11 +919,14 @@ function chooseCandidate(candidates, task, persona, rng, step, interactionFrame 
       reason: interactionFrame
         ? "No encontre elementos semanticos visibles y probe una region probable dentro del frame mobile del prototipo."
         : "No encontre elementos semanticos visibles y probe una region probable del prototipo.",
-      score: 44
+      score: 44,
+      candidateCount: 0
     };
   }
 
   const tokens = tokenize(`${task.prompt} ${task.success_criteria}`);
+  const biases = extractPersonaBiases(persona);
+
   const scored = candidates
     .map((candidate) => {
       const textTokens = tokenize(candidate.text);
@@ -862,7 +937,33 @@ function chooseCandidate(candidates, task, persona, rng, step, interactionFrame 
       const noisePenalty = /(cookies?|sign up|log in|login|register)/i.test(candidate.text) && !/(allow all cookies|do not allow cookies)/i.test(candidate.text) ? 18 : 0;
       const restartPenalty = candidate.isRestart ? 24 : 0;
       const shortLabelBias = candidate.text && candidate.text.length <= 28 ? 8 : 0;
-      const score = 40 + textOverlap * 14 + ctaBias + clarityBias + cookieBias + shortLabelBias - noisePenalty - restartPenalty - step * 2;
+
+      // P1-A: persona-aware biases
+      const isCta = /comprar|reservar|continuar|siguiente|confirmar|book|buy|checkout/i.test(candidate.text || "");
+      const isExploration = /ver m[aá]s|detalle|opciones|comparar|explorar|more|details/i.test(candidate.text || "");
+      const isSecondaryNav = /men[uú]|categor|filtro|buscar|search|filter/i.test(candidate.text || "");
+      const speedBias = biases.speedProfile === "fast"
+        ? (isCta ? 10 : isExploration ? -8 : 0)
+        : biases.speedProfile === "explorer"
+          ? (isExploration ? 10 : isCta ? -6 : 0)
+          : 0;
+      const frictionText = `${candidate.text || ""} ${candidate.tag || ""}`.toLowerCase();
+      const frictionBias = biases.frictionKeywords.some((kw) => frictionText.includes(kw)) ? -10 : 0;
+      const goalBias = Math.min(14, biases.goalTokens.filter((t) => textTokens.includes(t)).length * 7);
+      const area = (candidate.width || 0) * (candidate.height || 0);
+      const mobileBias = biases.isMobile ? (area >= 2000 ? 8 : area < 600 && area > 0 ? -6 : 0) : 0;
+      const explorationBias = biases.explorationTendency === "direct"
+        ? (isSecondaryNav ? -6 : 0)
+        : biases.explorationTendency === "exploratory"
+          ? (isSecondaryNav ? 8 : 0)
+          : 0;
+
+      // Nodos con transicion real tienen prioridad sobre los decorativos
+      const transitionBias = candidate.hasTransition ? 16 : -4;
+
+      const score = 40 + textOverlap * 14 + ctaBias + clarityBias + cookieBias + shortLabelBias
+        + speedBias + frictionBias + goalBias + mobileBias + explorationBias + transitionBias
+        - noisePenalty - restartPenalty - step * 2;
       return { ...candidate, score };
     })
     .sort((a, b) => b.score - a.score);
@@ -871,6 +972,7 @@ function chooseCandidate(candidates, task, persona, rng, step, interactionFrame 
   return {
     ...chosen,
     type: "candidate",
+    candidateCount: candidates.length,
     reason: chosen.text
       ? `Hice click en "${chosen.text}" porque parecia la accion mas coherente con la tarea.`
       : "Probe la zona clickeable mas prominente disponible."
@@ -1019,7 +1121,8 @@ async function buildBlockedRun(task, persona, startedAt, seed, runId, rng, reaso
   if (interactionFrame && viewport) {
     await writeFrameDebugArtifact(runDir, runId, screen, interactionFrame, debugArtifacts, viewport);
   }
-  const findings = buildFindings(task, persona, "abandoned", rng);
+  const blockedStepLog = [{ step: 1, screen, action: "abandon", reason, certainty: 26, timestamp: new Date().toISOString() }];
+  const findings = buildFindings(task, persona, "abandoned", rng, blockedStepLog, [], []);
   return {
     id: runId,
     project_id: task.project_id || persona.project_id || null,
@@ -1031,17 +1134,8 @@ async function buildBlockedRun(task, persona, startedAt, seed, runId, rng, reaso
     started_at: startedAt.toISOString(),
     ended_at: new Date().toISOString(),
     completion_status: "abandoned",
-    persona_response: composePersonaResponse(persona, task, "abandoned", findings, 1),
-    step_log: [
-      {
-        step: 1,
-        screen,
-        action: "abandon",
-        reason,
-        certainty: 26,
-        timestamp: new Date().toISOString()
-      }
-    ],
+    persona_response: composePersonaResponse(persona, task, "abandoned", findings, 1, blockedStepLog),
+    step_log: blockedStepLog,
     click_points: [],
     screen_transitions: [],
     screenshots,
@@ -1439,8 +1533,18 @@ function looksLikeStaticPrototypeShell(screenLabel, task) {
 }
 
 function looksSuccessful(task, plan, screen) {
-  const bag = `${plan.text || ""} ${screen || ""} ${task.success_criteria || ""}`.toLowerCase();
-  return ["book", "confirm", "checkout", "reserva", "confirmacion", "success"].some((token) => bag.includes(token));
+  const bag = `${plan.text || ""} ${screen || ""}`.toLowerCase();
+  const criteriaTokens = tokenize(task.success_criteria);
+  const promptTokens = tokenize(task.prompt);
+  const taskTokens = [...new Set([...criteriaTokens, ...promptTokens])];
+  const universalTokens = ["confirm", "confirmacion", "success", "exito", "gracias", "completado", "listo"];
+  const negativeTokens = ["error", "failed", "invalid", "retry", "reintentar", "fallo", "incorrecto"];
+  const taskMatches = taskTokens.filter((t) => bag.includes(t)).length;
+  const universalMatches = universalTokens.filter((t) => bag.includes(t)).length;
+  const negativeMatches = negativeTokens.filter((t) => bag.includes(t)).length;
+  const confidence = Math.max(0, Math.min(100, taskMatches * 30 + universalMatches * 15 - negativeMatches * 40));
+  const success = (taskMatches >= 2 || (taskMatches >= 1 && universalMatches >= 1)) && negativeMatches === 0;
+  return { success, confidence };
 }
 
 async function fingerprintPage(page) {
@@ -1758,7 +1862,12 @@ function simulateRun(task, persona, iteration, overrides = {}) {
     completionStatus = "uncertain";
   }
 
-  const findings = buildFindings(task, persona, completionStatus, rng);
+  // Agregar successConfidence sintetico al ultimo step
+  if (stepLog.length > 0) {
+    stepLog[stepLog.length - 1].successConfidence = completionStatus === "completed" ? 72 + Math.round(rng() * 18) : 28 + Math.round(rng() * 18);
+  }
+
+  const findings = buildFindings(task, persona, completionStatus, rng, stepLog, clickPoints, transitions);
   const endedAt = new Date(startedAt.getTime() + stepCount * 9000);
   const screenshots = screens.map((screen, index) => ({
     screen,
@@ -1777,7 +1886,7 @@ function simulateRun(task, persona, iteration, overrides = {}) {
     started_at: startedAt.toISOString(),
     ended_at: endedAt.toISOString(),
     completion_status: completionStatus,
-    persona_response: composePersonaResponse(persona, task, completionStatus, findings, stepCount),
+    persona_response: composePersonaResponse(persona, task, completionStatus, findings, stepCount, stepLog),
     step_log: stepLog,
     click_points: clickPoints,
     screen_transitions: transitions,
@@ -1953,11 +2062,42 @@ function composeStepReason(persona, task, action, screen, certainty) {
   return `En ${screen}, tome la accion ${action} porque ${behavior} y percibi una certeza de ${certainty}% frente al objetivo: ${task.prompt.toLowerCase()}.`;
 }
 
-function composePersonaResponse(persona, task, status, findings, stepCount) {
+function composePersonaResponse(persona, task, status, findings, stepCount, stepLog = []) {
   const intro = `Yo llegue a esta prueba como ${persona.role || "usuario"} ${persona.segment ? `del segmento ${persona.segment}` : ""} y trate de ${task.prompt.toLowerCase()}.`;
-  const understanding = task.type === "navigation"
-    ? `Lo primero que entendi fue que tenia que recorrer un flujo con ${stepCount} pasos aproximados y fijarme rapido si podia avanzar sin sentirme perdido.`
-    : "Lo primero que hice fue reaccionar desde mi contexto real y no desde una mirada experta del producto.";
+
+  // Arco de certeza desde el stepLog real
+  let understanding;
+  if (task.type === "navigation" && stepLog.length >= 3) {
+    const firstCertainty = stepLog[0].certainty || 64;
+    const lastCertainty = stepLog[stepLog.length - 1].certainty || 64;
+    const arc = lastCertainty >= firstCertainty
+      ? "El flujo me fue dando mas confianza a medida que avanzaba."
+      : "Senti que iba perdiendo el hilo a medida que avanzaba.";
+    understanding = `Empece con ${firstCertainty}% de certeza y termine en ${lastCertainty}%. ${arc}`;
+  } else if (task.type === "navigation") {
+    understanding = `Recorri el flujo en ${stepCount} pasos y fui evaluando si podia avanzar sin perderme.`;
+  } else {
+    understanding = "Lo primero que hice fue reaccionar desde mi contexto real y no desde una mirada experta del producto.";
+  }
+
+  // Pantalla mas dificil
+  let worstScreenNote = "";
+  if (stepLog.length >= 2) {
+    const screenCertainty = {};
+    const screenCount = {};
+    for (const s of stepLog) {
+      if (!s.screen) continue;
+      screenCertainty[s.screen] = (screenCertainty[s.screen] || 0) + (s.certainty || 64);
+      screenCount[s.screen] = (screenCount[s.screen] || 0) + 1;
+    }
+    const worstScreen = Object.keys(screenCertainty).reduce((a, b) =>
+      (screenCertainty[a] / screenCount[a]) < (screenCertainty[b] / screenCount[b]) ? a : b, Object.keys(screenCertainty)[0]);
+    if (worstScreen) {
+      const avgCertainty = Math.round(screenCertainty[worstScreen] / screenCount[worstScreen]);
+      worstScreenNote = ` La pantalla donde mas me costo fue "${worstScreen}" (certeza promedio: ${avgCertainty}%).`;
+    }
+  }
+
   const friction = findings[0]
     ? `Lo que mas me freno fue ${findings[0].label.toLowerCase()}: ${findings[0].detail.toLowerCase()}.`
     : "No tengo suficiente informacion en mi perfil para responder eso con precision.";
@@ -1967,7 +2107,7 @@ function composePersonaResponse(persona, task, status, findings, stepCount) {
   const next = status === "abandoned" || status === "error"
     ? "Si esto me pasara en un uso real, probablemente lo dejaria para mas tarde o buscaria otra alternativa."
     : "Despues de esto seguiria evaluando si el flujo realmente vale el esfuerzo que me pide.";
-  return `${intro} ${understanding} ${friction} ${confidence} ${next}`;
+  return `${intro} ${understanding}${worstScreenNote} ${friction} ${confidence} ${next}`;
 }
 
 function summarizeRun(task, persona, status, findings) {
@@ -1975,9 +2115,127 @@ function summarizeRun(task, persona, status, findings) {
   return `${persona.name} termino el task ${task.type} como ${status} con una friccion ${severity} centrada en ${findings[0] ? findings[0].label.toLowerCase() : "claridad general"}.`;
 }
 
-function buildFindings(task, persona, status, rng) {
+function buildFindings(task, persona, status, rng, stepLog = [], clickPoints = [], screenTransitions = []) {
+  const candidates = [];
+
+  // Patron 1: Estancamiento (2+ steps en el mismo screen)
+  if (stepLog.length >= 2) {
+    let streak = 1;
+    let streakScreen = stepLog[0].screen;
+    let maxStreak = 1;
+    let maxStreakScreen = streakScreen;
+    for (let i = 1; i < stepLog.length; i++) {
+      if (stepLog[i].screen === stepLog[i - 1].screen) {
+        streak += 1;
+        if (streak > maxStreak) { maxStreak = streak; maxStreakScreen = stepLog[i].screen; }
+      } else {
+        streak = 1;
+        streakScreen = stepLog[i].screen;
+      }
+    }
+    if (maxStreak >= 2) {
+      candidates.push({
+        label: `Estancamiento en ${maxStreakScreen}`,
+        severity: maxStreak >= 3 ? "critical" : "high",
+        detail: `El usuario paso ${maxStreak} pasos consecutivos en "${maxStreakScreen}" sin lograr avanzar a la siguiente pantalla.`,
+        priority: 80 + maxStreak * 5
+      });
+    }
+  }
+
+  // Patron 2: Perdida de orientacion (certainty decreasing)
+  if (stepLog.length >= 2) {
+    const first = stepLog[0].certainty || 64;
+    const last = stepLog[stepLog.length - 1].certainty || 64;
+    const delta = last - first;
+    if (delta <= -15) {
+      candidates.push({
+        label: "Perdida de orientacion progresiva",
+        severity: delta <= -30 ? "critical" : "high",
+        detail: `La certeza cayo de ${first}% a ${last}% a lo largo de ${stepLog.length} pasos, indicando desorientacion creciente.`,
+        priority: 70 + Math.abs(delta)
+      });
+    }
+  }
+
+  // Patron 3: Hotspots invisibles (click sin candidatos semanticos)
+  const blindStep = stepLog.find((s) => s.action === "click_region");
+  if (blindStep) {
+    candidates.push({
+      label: "Hotspots invisibles",
+      severity: "high",
+      detail: `En el paso ${blindStep.step} no habia elementos semanticos detectables y se recurrio a coordenadas estimadas.`,
+      priority: 65
+    });
+  }
+
+  // Patron 4: Confirmacion ambigua (successConfidence bajo)
+  const lastStep = stepLog[stepLog.length - 1];
+  if (lastStep && lastStep.successConfidence !== undefined && lastStep.successConfidence < 50) {
+    candidates.push({
+      label: "Confirmacion ambigua",
+      severity: "high",
+      detail: `El final del flujo no genero suficiente certeza de exito (${lastStep.successConfidence}%). La pantalla de cierre no comunica con claridad el resultado.`,
+      priority: 60
+    });
+  }
+
+  // Patron 5: Friccion de entrada (primeros 2 pasos son cookie/login)
+  if (stepLog.length >= 2) {
+    const entryActions = stepLog.slice(0, 2);
+    const hasEntryFriction = entryActions.some((s) => /cookie|login|sign|accept|aceptar/i.test(s.reason || ""));
+    if (hasEntryFriction) {
+      candidates.push({
+        label: "Friccion de entrada excesiva",
+        severity: "medium",
+        detail: "Los primeros pasos fueron consumidos por barreras de acceso (cookies, login) antes de poder interactuar con el flujo real.",
+        priority: 55
+      });
+    }
+  }
+
+  // Patron 6: Ruta forzada (solo 1 candidato disponible)
+  const forcedStep = stepLog.find((s) => s.candidateCount === 1);
+  if (forcedStep) {
+    candidates.push({
+      label: "Ruta forzada sin alternativas",
+      severity: "medium",
+      detail: `En el paso ${forcedStep.step} solo habia una opcion disponible, eliminando la agencia del usuario.`,
+      priority: 50
+    });
+  }
+
+  // Patron 7: Prototipo con baja cobertura de transiciones
+  const totalCandidatesSum = stepLog.reduce((sum, s) => sum + (s.candidateCount || 0), 0);
+  const totalConnectedSum = stepLog.reduce((sum, s) => sum + (s.connectedCount || 0), 0);
+  const coverageRatio = totalCandidatesSum > 0 ? totalConnectedSum / totalCandidatesSum : 1;
+  if (coverageRatio < 0.3 && totalCandidatesSum > 3) {
+    candidates.push({
+      label: "Prototipo con baja cobertura de transiciones",
+      severity: "high",
+      detail: `Solo ${Math.round(coverageRatio * 100)}% de los elementos interactivos detectados tienen conexiones de prototipo definidas (${totalConnectedSum} de ${totalCandidatesSum}).`,
+      priority: 75
+    });
+  }
+
+  // Patron 8: Navegacion indirecta (fallback usado)
+  const fallbackSteps = stepLog.filter((s) => s.navigationFallback);
+  if (fallbackSteps.length > 0) {
+    candidates.push({
+      label: "Navegacion indirecta detectada",
+      severity: "medium",
+      detail: `En ${fallbackSteps.length} paso(s) el elemento clickeado no tenia transicion directa y se uso un nodo cercano como alternativa.`,
+      priority: 48
+    });
+  }
+
+  // Ordenar por prioridad y tomar top 3
+  candidates.sort((a, b) => b.priority - a.priority || rng() - 0.5);
+  const top3 = candidates.slice(0, 3);
+
+  // Fallbacks si hay menos de 3 patrones detectados
   const level = persona.digital_level;
-  return [
+  const fallbacks = [
     {
       label: "Claridad del siguiente paso",
       severity: status === "abandoned" || status === "error" ? "critical" : "high",
@@ -1998,6 +2256,14 @@ function buildFindings(task, persona, status, rng) {
       detail: "Hay demasiadas decisiones simultaneas para un contexto de uso rapido o cansado."
     }
   ];
+
+  while (top3.length < 3) {
+    const fb = fallbacks[top3.length];
+    if (fb) top3.push(fb);
+    else break;
+  }
+
+  return top3.map(({ label, severity, detail }) => ({ label, severity, detail }));
 }
 
 function buildFollowUps(task, status) {
