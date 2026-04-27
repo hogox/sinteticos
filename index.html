@@ -475,6 +475,20 @@
       </main>
     </div>
 
+    <div class="modal-backdrop hidden" id="error-modal" aria-hidden="true">
+      <div class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="error-modal-title">
+        <div class="confirm-modal__header">
+          <p class="eyebrow">Configuración incompleta</p>
+          <h3 id="error-modal-title">No se puede lanzar el run</h3>
+        </div>
+        <p class="confirm-modal__body" id="error-modal-body"></p>
+        <ul class="error-modal__list hidden" id="error-modal-list"></ul>
+        <div class="confirm-modal__actions">
+          <button class="button" type="button" id="error-modal-close">Entendido</button>
+        </div>
+      </div>
+    </div>
+
     <div class="modal-backdrop hidden" id="confirm-modal" aria-hidden="true">
       <div class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title">
         <div class="confirm-modal__header">

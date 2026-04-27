@@ -13,6 +13,28 @@ export function confirmAction({ title, body, confirmLabel = "Confirmar" }) {
   });
 }
 
+export function alertError({ title, body, issues = [] }) {
+  const modal = document.getElementById("error-modal");
+  document.getElementById("error-modal-title").textContent = title;
+  document.getElementById("error-modal-body").textContent = body;
+  const list = document.getElementById("error-modal-list");
+  if (issues.length > 0) {
+    list.innerHTML = issues.map((i) => `<li>${i}</li>`).join("");
+    list.classList.remove("hidden");
+  } else {
+    list.innerHTML = "";
+    list.classList.add("hidden");
+  }
+  modal.classList.remove("hidden");
+  modal.setAttribute("aria-hidden", "false");
+}
+
+export function closeErrorModal() {
+  const modal = document.getElementById("error-modal");
+  modal.classList.add("hidden");
+  modal.setAttribute("aria-hidden", "true");
+}
+
 export function closeConfirmation(confirmed) {
   const ui = getUi();
   if (!ui.confirmation) {

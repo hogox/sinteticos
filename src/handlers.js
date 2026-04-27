@@ -2,7 +2,7 @@ import { api } from "./api.js";
 import { getState, setState, getUi } from "./store.js";
 import { value, getProjectById, getPersonaById, getTaskById } from "./utils.js";
 import { fillProjectForm, fillPersonaForm, fillTaskForm } from "./forms.js";
-import { confirmAction } from "./confirmation.js";
+import { confirmAction, alertError } from "./confirmation.js";
 import { render } from "./render.js";
 import { renderRuns, renderPersonas, renderTasks } from "./render-entities.js";
 import { renderDashboard } from "./render-dashboard.js";
@@ -130,6 +130,29 @@ export async function onTaskSubmit(event) {
   event.currentTarget.reset();
 }
 
+function validateTaskForRun(task, persona) {
+  const issues = [];
+  if (!task) {
+    issues.push("No se encontró la task seleccionada.");
+    return issues;
+  }
+  if (!persona) {
+    issues.push("La task no tiene una persona asignada.");
+  }
+  if (!task.prompt || task.prompt.trim() === "") {
+    issues.push("El campo Prompt / Objetivo está vacío.");
+  }
+  const url = (task.url || "").trim();
+  if (!url) {
+    issues.push("La URL del prototipo Figma está vacía.");
+  } else if (url.startsWith("REEMPLAZAR") || url.toLowerCase().includes("placeholder")) {
+    issues.push(`La URL sigue siendo un placeholder: "${url}". Editá la task y pegá el link real de Figma.`);
+  } else if (!url.startsWith("http")) {
+    issues.push(`La URL no parece válida: "${url}".`);
+  }
+  return issues;
+}
+
 export async function onRunSubmit(event) {
   event.preventDefault();
   const ui = getUi();
@@ -139,6 +162,18 @@ export async function onRunSubmit(event) {
   const formData = new FormData(event.currentTarget);
   const taskId = value(formData, "taskId");
   const personaId = value(formData, "personaId");
+  const state = getState();
+  const task = getTaskById(taskId, state);
+  const persona = getPersonaById(personaId, state) || getPersonaById(task?.persona_id, state);
+  const issues = validateTaskForRun(task, persona);
+  if (issues.length > 0) {
+    alertError({
+      title: "No se puede lanzar el run",
+      body: "Revisá los siguientes problemas antes de continuar:",
+      issues
+    });
+    return;
+  }
   const runCount = Math.max(1, Math.min(8, Number(value(formData, "runCount")) || 1));
   setState(await api.createRuns(taskId, personaId, runCount));
   ensureSelection();
@@ -286,6 +321,16 @@ export async function handleTaskAction(action, id) {
   }
 
   if (action === "clone-run") {
+    const persona = getPersonaById(task.persona_id, state);
+    const issues = validateTaskForRun(task, persona);
+    if (issues.length > 0) {
+      alertError({
+        title: "No se puede lanzar el run",
+        body: "Revisá los siguientes problemas antes de continuar:",
+        issues
+      });
+      return;
+    }
     setState(await api.createRuns(id, task.persona_id, 1));
     ensureSelection();
     ui.section = "runs";
