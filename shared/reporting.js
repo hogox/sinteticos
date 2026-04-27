@@ -25,8 +25,8 @@ export function summarizeRun(task, persona, status, findings) {
   return `${persona.name} termino el task ${task.type} como ${status} con una friccion ${severity} centrada en ${findings[0] ? findings[0].label.toLowerCase() : "claridad general"}.`;
 }
 
-export function buildFindings(task, persona, status, rng) {
-  return [
+export function buildFindings(task, persona, status, rng, coverageData = {}) {
+  const findings = [
     {
       label: "Claridad del siguiente paso",
       severity: status === "abandoned" || status === "error" ? "critical" : "high",
@@ -47,6 +47,47 @@ export function buildFindings(task, persona, status, rng) {
       detail: "Hay demasiadas decisiones simultaneas para un contexto de uso rapido o cansado."
     }
   ];
+
+  // Phase 3 - Análisis de cobertura del prototipo
+  const { totalCandidates, totalConnected, coverageRatio, fallbackSteps, retriedSteps } = coverageData;
+
+  if (totalCandidates && totalCandidates > 3 && coverageRatio !== undefined) {
+    if (coverageRatio < 0.3) {
+      findings.push({
+        label: "Prototipo con baja cobertura de transiciones",
+        severity: "high",
+        detail: `Solo ${Math.round(coverageRatio * 100)}% de los elementos interactivos detectados tienen conexiones de prototipo definidas (${totalConnected} de ${totalCandidates}). Esto puede dejar al usuario "atrapado" en pantallas sin salidas claras.`,
+        priority: 75
+      });
+    } else if (coverageRatio < 0.6) {
+      findings.push({
+        label: "Cobertura parcial de transiciones",
+        severity: "medium",
+        detail: `El ${Math.round(coverageRatio * 100)}% de los elementos interactivos tienen conexiones definidas (${totalConnected} de ${totalCandidates}). El prototipo podría ser mas completo en ciertos flujos secundarios.`,
+        priority: 55
+      });
+    }
+  }
+
+  if (fallbackSteps && fallbackSteps > 0) {
+    findings.push({
+      label: "Navegacion indirecta detectada",
+      severity: fallbackSteps > 2 ? "medium" : "low",
+      detail: `En ${fallbackSteps} paso(s) el elemento clickeado no tenia transicion directa y se uso un nodo cercano como alternativa. Esto sugiere que el flujo esperado y el prototipo no estan completamente alineados.`,
+      priority: 48
+    });
+  }
+
+  if (retriedSteps && retriedSteps > 0) {
+    findings.push({
+      label: "Transiciones requirieron reintentos",
+      severity: retriedSteps > 1 ? "low" : "low",
+      detail: `En ${retriedSteps} paso(s) fue necesario reintentar con un elemento diferente para encontrar una transicion valida. El usuario podria no tener esta capacidad de reintento en un contexto real.`,
+      priority: 40
+    });
+  }
+
+  return findings.slice(0, 6);  // Limitar a máximo 6 findings
 }
 
 export function buildFollowUps(task, status) {

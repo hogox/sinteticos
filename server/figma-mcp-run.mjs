@@ -71,6 +71,7 @@ export async function executeMcpNavigationRun(task, persona, iteration, accessTo
 
     for (let step = 1; step <= (task.max_steps || 5); step += 1) {
       const candidates = nodesToCandidates(frameData.nodes, frameData.frameWidth, frameData.frameHeight);
+      const connectedCount = candidates.filter(c => c.hasTransition).length;
       const plan = chooseCandidate(candidates, task, persona, rng, step, null);
 
       if (!plan) {
@@ -81,6 +82,8 @@ export async function executeMcpNavigationRun(task, persona, iteration, accessTo
           action: "abandon",
           reason: "No encontre un objetivo visible o navegable para seguir avanzando.",
           certainty: 34,
+          candidateCount: candidates.length,
+          connectedCount,
           timestamp: new Date().toISOString()
         });
         break;
@@ -101,10 +104,18 @@ export async function executeMcpNavigationRun(task, persona, iteration, accessTo
         action: plan.type === "candidate" ? "click_text" : "click_region",
         reason: plan.reason,
         certainty,
+        candidateCount: candidates.length,
+        connectedCount,
         timestamp: new Date().toISOString()
       });
 
-      const nextNodeId = findTransitionTarget(frameData.nodes, plan, frameData.frameWidth, frameData.frameHeight);
+      const transitionResult = findTransitionTarget(frameData.nodes, plan, frameData.frameWidth, frameData.frameHeight);
+      const nextNodeId = typeof transitionResult === 'string' ? transitionResult : transitionResult?.targetId;
+      const navigationFallback = typeof transitionResult === 'object' && transitionResult?.fallback === true;
+
+      if (navigationFallback) {
+        stepLog[stepLog.length - 1].navigationFallback = true;
+      }
 
       if (nextNodeId && nextNodeId !== currentNodeId) {
         const nextFrameData = await getFrameNodes(fileKey, nextNodeId, accessToken);
@@ -122,10 +133,42 @@ export async function executeMcpNavigationRun(task, persona, iteration, accessTo
             screenshots.push(stepScreenshot);
           }
         }
-      } else if (step >= 2 && !nextNodeId) {
-        completionStatus = "uncertain";
-        executionNotes += ` No se encontraron mas transiciones a partir del paso ${step}.`;
-        break;
+      } else if (!nextNodeId) {
+        // Reintento: buscar candidato alternativo con transición
+        const altCandidates = candidates.filter(c => c.hasTransition && c !== plan);
+        if (altCandidates.length > 0 && step < (task.max_steps || 5)) {
+          // Reintentar con el mejor candidato que tenga transición
+          stepLog[stepLog.length - 1].retried = true;
+          const altPlan = altCandidates[0];
+          const altTransitionResult = findTransitionTarget(frameData.nodes, altPlan, frameData.frameWidth, frameData.frameHeight);
+          const altNextNodeId = typeof altTransitionResult === 'string' ? altTransitionResult : altTransitionResult?.targetId;
+
+          if (altNextNodeId && altNextNodeId !== currentNodeId) {
+            const nextFrameData = await getFrameNodes(fileKey, altNextNodeId, accessToken);
+            if (nextFrameData && nextFrameData.nodes.length) {
+              const nextScreen = nextFrameData.frameName || `Frame ${altNextNodeId}`;
+              screenTransitions.push({ from: currentScreen, to: nextScreen, step, retried: true });
+              currentScreen = nextScreen;
+              currentNodeId = altNextNodeId;
+              nextFrameData.nodes = await enrichWithTransitions(nextFrameData.nodes, fileKey, accessToken);
+              frameData = nextFrameData;
+
+              const stepScreenshot = await getFrameScreenshot(fileKey, altNextNodeId, accessToken, runDir, runId, step + 1);
+              if (stepScreenshot) {
+                stepScreenshot.screen = nextScreen;
+                screenshots.push(stepScreenshot);
+              }
+            }
+          } else if (step >= 2) {
+            completionStatus = "uncertain";
+            executionNotes += ` No se encontraron transiciones validas (incluso con reintento) a partir del paso ${step}.`;
+            break;
+          }
+        } else if (step >= 2) {
+          completionStatus = "uncertain";
+          executionNotes += ` No se encontraron mas transiciones a partir del paso ${step}.`;
+          break;
+        }
       }
 
       if (step >= 2 && looksStructurallySuccessful(task, plan, currentScreen)) {
@@ -138,7 +181,20 @@ export async function executeMcpNavigationRun(task, persona, iteration, accessTo
       }
     }
 
-    const findings = buildFindings(task, persona, completionStatus, rng);
+    // Calcular métricas de cobertura del prototipo
+    const totalCandidates = stepLog.reduce((sum, s) => sum + (s.candidateCount || 0), 0);
+    const totalConnected = stepLog.reduce((sum, s) => sum + (s.connectedCount || 0), 0);
+    const coverageRatio = totalCandidates > 0 ? totalConnected / totalCandidates : 1;
+    const fallbackSteps = stepLog.filter(s => s.navigationFallback).length;
+    const retriedSteps = stepLog.filter(s => s.retried).length;
+
+    const findings = buildFindings(task, persona, completionStatus, rng, {
+      totalCandidates,
+      totalConnected,
+      coverageRatio,
+      fallbackSteps,
+      retriedSteps
+    });
     const endedAt = new Date();
     return {
       id: runId,
@@ -168,6 +224,13 @@ export async function executeMcpNavigationRun(task, persona, iteration, accessTo
         interaction_frame: null,
         debug_artifacts: [],
         prioritized_findings: findings,
+        prototype_coverage: {
+          total_interactive_nodes: totalCandidates,
+          nodes_with_transitions: totalConnected,
+          coverage_ratio: coverageRatio,
+          fallback_steps: fallbackSteps,
+          retried_steps: retriedSteps
+        },
         trust_signals: [
           "Estructura de nodos del diseno original via Figma API",
           "Posiciones y jerarquia directas del archivo Figma",
