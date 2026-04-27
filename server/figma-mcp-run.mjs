@@ -218,7 +218,9 @@ export async function executeMcpNavigationRun(task, persona, iteration, accessTo
       fallbackSteps,
       retriedSteps,
       retriedSuccessfully,
-      totalRetryAttempts
+      totalRetryAttempts,
+      stepLog,
+      screenTransitions
     });
     const endedAt = new Date();
     return {

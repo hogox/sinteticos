@@ -56,9 +56,12 @@ export function buildFindings(task, persona, status, rng, coverageData = {}) {
     fallbackSteps,
     retriedSteps,
     retriedSuccessfully = 0,
-    totalRetryAttempts = 0
+    totalRetryAttempts = 0,
+    stepLog = [],
+    screenTransitions = []
   } = coverageData;
 
+  // 3.1 Cobertura de transiciones
   if (totalCandidates && totalCandidates > 3 && coverageRatio !== undefined) {
     if (coverageRatio < 0.3) {
       findings.push({
@@ -71,12 +74,13 @@ export function buildFindings(task, persona, status, rng, coverageData = {}) {
       findings.push({
         label: "Cobertura parcial de transiciones",
         severity: "medium",
-        detail: `El ${Math.round(coverageRatio * 100)}% de los elementos interactivos tienen conexiones definidas (${totalConnected} de ${totalCandidates}). El prototipo podría ser mas completo en ciertos flujos secundarios.`,
+        detail: `El ${Math.round(coverageRatio * 100)}% de los elementos interactivos tienen conexiones definidas (${totalConnected} de ${totalCandidates}). El prototipo podria ser mas completo en ciertos flujos secundarios.`,
         priority: 55
       });
     }
   }
 
+  // 3.2 Navegación indirecta (fallback)
   if (fallbackSteps && fallbackSteps > 0) {
     findings.push({
       label: "Navegacion indirecta detectada",
@@ -86,12 +90,11 @@ export function buildFindings(task, persona, status, rng, coverageData = {}) {
     });
   }
 
+  // 3.3 Reintentos
   if (retriedSteps && retriedSteps > 0) {
-    const successRate = retriedSuccessfully && retriedSteps > 0 ? Math.round((retriedSuccessfully / retriedSteps) * 100) : 0;
-    const avgAttemptsPerRetry = totalRetryAttempts && retriedSteps > 0 ? (totalRetryAttempts / retriedSteps).toFixed(1) : 1;
+    const successRate = retriedSuccessfully > 0 ? Math.round((retriedSuccessfully / retriedSteps) * 100) : 0;
 
     if (retriedSuccessfully === retriedSteps) {
-      // Todos los reintentos fueron exitosos
       findings.push({
         label: "Recuperacion exitosa mediante alternativas",
         severity: retriedSteps > 2 ? "medium" : "low",
@@ -99,7 +102,6 @@ export function buildFindings(task, persona, status, rng, coverageData = {}) {
         priority: 35
       });
     } else if (retriedSuccessfully > 0) {
-      // Algunos reintentos exitosos, algunos fallidos
       findings.push({
         label: "Recuperacion parcial mediante reintentos",
         severity: "low",
@@ -107,7 +109,6 @@ export function buildFindings(task, persona, status, rng, coverageData = {}) {
         priority: 42
       });
     } else {
-      // Todos los reintentos fallaron
       findings.push({
         label: "Reintentos fallidos - bloqueo en navegacion",
         severity: "high",
@@ -117,7 +118,64 @@ export function buildFindings(task, persona, status, rng, coverageData = {}) {
     }
   }
 
-  return findings.slice(0, 6);  // Limitar a máximo 6 findings
+  // 3.4 Estancamiento: pantallas repetidas sin avance
+  if (stepLog.length > 2) {
+    const screens = stepLog.map(s => s.screen).filter(Boolean);
+    const screenCounts = screens.reduce((acc, s) => { acc[s] = (acc[s] || 0) + 1; return acc; }, {});
+    const stagnantScreens = Object.entries(screenCounts).filter(([, count]) => count >= 3);
+
+    if (stagnantScreens.length > 0) {
+      const examples = stagnantScreens.map(([name, count]) => `"${name}" (${count}x)`).join(", ");
+      findings.push({
+        label: "Estancamiento en pantallas del prototipo",
+        severity: "high",
+        detail: `El usuario permanecio o regreso a las mismas pantallas multiples veces sin avanzar: ${examples}. El flujo no da senales claras de progreso.`,
+        priority: 72
+      });
+    }
+  }
+
+  // 3.5 Decaimiento de certeza: confianza baja progresivamente
+  if (stepLog.length >= 3) {
+    const certainties = stepLog.map(s => s.certainty).filter(n => typeof n === "number");
+    if (certainties.length >= 3) {
+      const first = certainties.slice(0, Math.ceil(certainties.length / 2));
+      const last = certainties.slice(Math.floor(certainties.length / 2));
+      const avgFirst = first.reduce((a, b) => a + b, 0) / first.length;
+      const avgLast = last.reduce((a, b) => a + b, 0) / last.length;
+      const decay = avgFirst - avgLast;
+
+      if (decay >= 15) {
+        findings.push({
+          label: "Decaimiento de certeza a lo largo del flujo",
+          severity: decay >= 25 ? "high" : "medium",
+          detail: `La confianza del agente al elegir acciones bajo de ~${Math.round(avgFirst)}% al inicio a ~${Math.round(avgLast)}% al final. El prototipo pierde claridad de accion a medida que el flujo avanza.`,
+          priority: 62
+        });
+      }
+    }
+  }
+
+  // 3.6 Pantallas sin salida: frames con 0 candidatos conectados
+  if (stepLog.length > 0) {
+    const deadEnds = stepLog.filter(s => s.connectedCount === 0 && s.candidateCount > 0);
+    if (deadEnds.length > 0) {
+      const screens = [...new Set(deadEnds.map(s => s.screen).filter(Boolean))];
+      findings.push({
+        label: "Pantallas sin transiciones definidas",
+        severity: deadEnds.length > 1 ? "high" : "medium",
+        detail: `${deadEnds.length} paso(s) ocurrieron en pantallas donde ningun elemento interactivo tenia transicion: ${screens.slice(0, 3).map(s => `"${s}"`).join(", ")}. Estas pantallas son callejones sin salida para el usuario.`,
+        priority: 70
+      });
+    }
+  }
+
+  // Ordenar por priority descendente (mayor prioridad = primer finding)
+  const withPriority = findings.filter(f => f.priority !== undefined);
+  const withoutPriority = findings.filter(f => f.priority === undefined);
+  withPriority.sort((a, b) => b.priority - a.priority);
+
+  return [...withPriority, ...withoutPriority].slice(0, 6);
 }
 
 export function buildFollowUps(task, status) {
