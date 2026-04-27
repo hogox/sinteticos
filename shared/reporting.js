@@ -49,7 +49,15 @@ export function buildFindings(task, persona, status, rng, coverageData = {}) {
   ];
 
   // Phase 3 - Análisis de cobertura del prototipo
-  const { totalCandidates, totalConnected, coverageRatio, fallbackSteps, retriedSteps } = coverageData;
+  const {
+    totalCandidates,
+    totalConnected,
+    coverageRatio,
+    fallbackSteps,
+    retriedSteps,
+    retriedSuccessfully = 0,
+    totalRetryAttempts = 0
+  } = coverageData;
 
   if (totalCandidates && totalCandidates > 3 && coverageRatio !== undefined) {
     if (coverageRatio < 0.3) {
@@ -79,12 +87,34 @@ export function buildFindings(task, persona, status, rng, coverageData = {}) {
   }
 
   if (retriedSteps && retriedSteps > 0) {
-    findings.push({
-      label: "Transiciones requirieron reintentos",
-      severity: retriedSteps > 1 ? "low" : "low",
-      detail: `En ${retriedSteps} paso(s) fue necesario reintentar con un elemento diferente para encontrar una transicion valida. El usuario podria no tener esta capacidad de reintento en un contexto real.`,
-      priority: 40
-    });
+    const successRate = retriedSuccessfully && retriedSteps > 0 ? Math.round((retriedSuccessfully / retriedSteps) * 100) : 0;
+    const avgAttemptsPerRetry = totalRetryAttempts && retriedSteps > 0 ? (totalRetryAttempts / retriedSteps).toFixed(1) : 1;
+
+    if (retriedSuccessfully === retriedSteps) {
+      // Todos los reintentos fueron exitosos
+      findings.push({
+        label: "Recuperacion exitosa mediante alternativas",
+        severity: retriedSteps > 2 ? "medium" : "low",
+        detail: `En ${retriedSteps} paso(s) el elemento inicial no tenia transicion, pero se recupero usando alternativas (${totalRetryAttempts} intento(s) total). El flujo permitio cambios de estrategia sin bloqueos.`,
+        priority: 35
+      });
+    } else if (retriedSuccessfully > 0) {
+      // Algunos reintentos exitosos, algunos fallidos
+      findings.push({
+        label: "Recuperacion parcial mediante reintentos",
+        severity: "low",
+        detail: `En ${retriedSteps} paso(s) fue necesario reintentar: ${retriedSuccessfully} exitosos, ${retriedSteps - retriedSuccessfully} fallidos. La estrategia de reintento tuvo ${successRate}% de exito.`,
+        priority: 42
+      });
+    } else {
+      // Todos los reintentos fallaron
+      findings.push({
+        label: "Reintentos fallidos - bloqueo en navegacion",
+        severity: "high",
+        detail: `En ${retriedSteps} paso(s) incluso los reintentos con elementos alternativos no encontraron transiciones validas. El usuario quedo "atrapado" sin poder avanzar.`,
+        priority: 68
+      });
+    }
   }
 
   return findings.slice(0, 6);  // Limitar a máximo 6 findings

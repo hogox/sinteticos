@@ -135,39 +135,60 @@ export async function executeMcpNavigationRun(task, persona, iteration, accessTo
         }
       } else if (!nextNodeId) {
         // Reintento: buscar candidato alternativo con transición
-        const altCandidates = candidates.filter(c => c.hasTransition && c !== plan);
-        if (altCandidates.length > 0 && step < (task.max_steps || 5)) {
-          // Reintentar con el mejor candidato que tenga transición
-          stepLog[stepLog.length - 1].retried = true;
-          const altPlan = altCandidates[0];
-          const altTransitionResult = findTransitionTarget(frameData.nodes, altPlan, frameData.frameWidth, frameData.frameHeight);
-          const altNextNodeId = typeof altTransitionResult === 'string' ? altTransitionResult : altTransitionResult?.targetId;
+        const connectedAlternatives = candidates
+          .filter(c => c.hasTransition && c !== plan)
+          .sort((a, b) => (b.score || 0) - (a.score || 0));
 
-          if (altNextNodeId && altNextNodeId !== currentNodeId) {
-            const nextFrameData = await getFrameNodes(fileKey, altNextNodeId, accessToken);
-            if (nextFrameData && nextFrameData.nodes.length) {
-              const nextScreen = nextFrameData.frameName || `Frame ${altNextNodeId}`;
-              screenTransitions.push({ from: currentScreen, to: nextScreen, step, retried: true });
-              currentScreen = nextScreen;
-              currentNodeId = altNextNodeId;
-              nextFrameData.nodes = await enrichWithTransitions(nextFrameData.nodes, fileKey, accessToken);
-              frameData = nextFrameData;
+        let retriedSuccessfully = false;
 
-              const stepScreenshot = await getFrameScreenshot(fileKey, altNextNodeId, accessToken, runDir, runId, step + 1);
-              if (stepScreenshot) {
-                stepScreenshot.screen = nextScreen;
-                screenshots.push(stepScreenshot);
+        if (connectedAlternatives.length > 0) {
+          // Intentar con candidatos alternativos (máximo 3 intentos)
+          const maxRetries = Math.min(3, connectedAlternatives.length);
+
+          for (let retryAttempt = 0; retryAttempt < maxRetries; retryAttempt += 1) {
+            const altPlan = connectedAlternatives[retryAttempt];
+            const altTransitionResult = findTransitionTarget(frameData.nodes, altPlan, frameData.frameWidth, frameData.frameHeight);
+            const altNextNodeId = typeof altTransitionResult === 'string' ? altTransitionResult : altTransitionResult?.targetId;
+
+            if (altNextNodeId && altNextNodeId !== currentNodeId) {
+              // Reintento exitoso
+              stepLog[stepLog.length - 1].retried = true;
+              stepLog[stepLog.length - 1].retryAttempts = retryAttempt + 1;
+              stepLog[stepLog.length - 1].originalText = plan.text;
+              stepLog[stepLog.length - 1].retriedText = altPlan.text;
+
+              const nextFrameData = await getFrameNodes(fileKey, altNextNodeId, accessToken);
+              if (nextFrameData && nextFrameData.nodes.length) {
+                const nextScreen = nextFrameData.frameName || `Frame ${altNextNodeId}`;
+                screenTransitions.push({ from: currentScreen, to: nextScreen, step, retried: true, retriedAttempt: retryAttempt + 1 });
+                currentScreen = nextScreen;
+                currentNodeId = altNextNodeId;
+                nextFrameData.nodes = await enrichWithTransitions(nextFrameData.nodes, fileKey, accessToken);
+                frameData = nextFrameData;
+
+                const stepScreenshot = await getFrameScreenshot(fileKey, altNextNodeId, accessToken, runDir, runId, step + 1);
+                if (stepScreenshot) {
+                  stepScreenshot.screen = nextScreen;
+                  screenshots.push(stepScreenshot);
+                }
+                retriedSuccessfully = true;
+                break;
               }
             }
-          } else if (step >= 2) {
+          }
+        }
+
+        // Si reintento falló o no hay alternativas
+        if (!retriedSuccessfully) {
+          if (step >= 2) {
             completionStatus = "uncertain";
-            executionNotes += ` No se encontraron transiciones validas (incluso con reintento) a partir del paso ${step}.`;
+            const reason = connectedAlternatives.length > 0
+              ? ` No se encontraron transiciones validas incluso tras ${Math.min(3, connectedAlternatives.length)} reintentos.`
+              : " No hay elementos interactivos con transiciones disponibles.";
+            executionNotes += reason;
             break;
           }
-        } else if (step >= 2) {
-          completionStatus = "uncertain";
-          executionNotes += ` No se encontraron mas transiciones a partir del paso ${step}.`;
-          break;
+          // En step 1, continuar al siguiente paso permitiendo otro intento
         }
       }
 
@@ -187,13 +208,17 @@ export async function executeMcpNavigationRun(task, persona, iteration, accessTo
     const coverageRatio = totalCandidates > 0 ? totalConnected / totalCandidates : 1;
     const fallbackSteps = stepLog.filter(s => s.navigationFallback).length;
     const retriedSteps = stepLog.filter(s => s.retried).length;
+    const retriedSuccessfully = stepLog.filter(s => s.retried && s.retriedText).length;
+    const totalRetryAttempts = stepLog.reduce((sum, s) => sum + (s.retryAttempts || 0), 0);
 
     const findings = buildFindings(task, persona, completionStatus, rng, {
       totalCandidates,
       totalConnected,
       coverageRatio,
       fallbackSteps,
-      retriedSteps
+      retriedSteps,
+      retriedSuccessfully,
+      totalRetryAttempts
     });
     const endedAt = new Date();
     return {
@@ -229,7 +254,10 @@ export async function executeMcpNavigationRun(task, persona, iteration, accessTo
           nodes_with_transitions: totalConnected,
           coverage_ratio: coverageRatio,
           fallback_steps: fallbackSteps,
-          retried_steps: retriedSteps
+          retried_steps: retriedSteps,
+          retried_successfully: retriedSuccessfully,
+          retry_success_rate: retriedSteps > 0 ? Math.round((retriedSuccessfully / retriedSteps) * 100) : null,
+          total_retry_attempts: totalRetryAttempts
         },
         trust_signals: [
           "Estructura de nodos del diseno original via Figma API",
