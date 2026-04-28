@@ -259,6 +259,9 @@ export async function handlePersonaAction(action, id) {
 
   if (action === "edit") {
     ui.editingPersonaId = id;
+    ui.personaCreateMode = "advanced";
+    const { setPersonaCreateMode } = await import("./persona-modes.js");
+    setPersonaCreateMode("advanced");
     fillPersonaForm(persona);
     return;
   }
