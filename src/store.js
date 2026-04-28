@@ -11,6 +11,8 @@ let ui = {
   editingTaskId: null,
   confirmation: null,
   runDetailView: "observed",
+  personaCreateMode: "advanced",
+  personaPreview: null,
   filters: {
     personaId: "all",
     taskId: "all",

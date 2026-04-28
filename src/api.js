@@ -210,6 +210,48 @@ function createApi() {
       return next;
     },
 
+    async aiGeneratePersonas(description, quantity) {
+      const runtime = getRuntime();
+      if (!runtime.backend) {
+        const error = new Error("Los modos asistidos requieren correr el server local (npm start). En modo browser-only no están disponibles.");
+        error.code = "NO_BACKEND";
+        throw error;
+      }
+      const response = await fetch("/api/personas/ai-generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ description, quantity })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const error = new Error(payload.error || `Request failed: ${response.status}`);
+        error.code = payload.code || "REQUEST_FAILED";
+        throw error;
+      }
+      return payload.personas || [];
+    },
+
+    async aiExtractPersonas(sourceText, quantity) {
+      const runtime = getRuntime();
+      if (!runtime.backend) {
+        const error = new Error("Los modos asistidos requieren correr el server local (npm start). En modo browser-only no están disponibles.");
+        error.code = "NO_BACKEND";
+        throw error;
+      }
+      const response = await fetch("/api/personas/ai-extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source_text: sourceText, quantity })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const error = new Error(payload.error || `Request failed: ${response.status}`);
+        error.code = payload.code || "REQUEST_FAILED";
+        throw error;
+      }
+      return payload.personas || [];
+    },
+
     async resetDemo() {
       const runtime = getRuntime();
       if (runtime.backend) {

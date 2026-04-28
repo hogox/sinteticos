@@ -248,8 +248,35 @@
                   <p class="eyebrow">Persona editor</p>
                   <h3 id="persona-form-title">Crear persona</h3>
                 </div>
+                <div class="pill-row" id="persona-mode-toggle" role="tablist" aria-label="Modo de creación">
+                  <button type="button" class="pill-button is-active" data-persona-mode="advanced" role="tab" aria-selected="true">Avanzado</button>
+                  <button type="button" class="pill-button" data-persona-mode="simple" role="tab" aria-selected="false">Simple</button>
+                  <button type="button" class="pill-button" data-persona-mode="upload" role="tab" aria-selected="false">Upload</button>
+                </div>
               </div>
-              <form id="persona-form" class="form-grid">
+
+              <form id="persona-simple-form" class="persona-mode-form simple-form" hidden>
+                <p class="mode-hint">Describe a la persona en lenguaje natural. La IA expandirá todos los campos del modo avanzado.</p>
+                <label>Descripción libre<textarea name="description" rows="6" required placeholder="Ej: dueña de pyme retail de 45 años en CDMX, baja confianza digital, quiere digitalizar inventario pero le frustran las apps complicadas."></textarea></label>
+                <label class="quantity-field">Cantidad de personas a generar<input type="number" name="quantity" min="1" max="10" value="1" required /></label>
+                <div class="form-actions">
+                  <button type="submit" id="persona-simple-submit">Generar con IA</button>
+                  <button type="button" class="ghost-button" id="persona-simple-reset">Limpiar</button>
+                </div>
+              </form>
+
+              <form id="persona-upload-form" class="persona-mode-form upload-form" hidden>
+                <p class="mode-hint">Sube archivos de texto (.txt, .md, .csv) o pega transcripciones, entrevistas o datos. La IA extraerá personas respaldadas por la evidencia.</p>
+                <label>Archivos<input type="file" name="files" accept=".txt,.md,.csv,text/plain,text/markdown,text/csv" multiple /></label>
+                <label>Texto pegado<textarea name="pasted_text" rows="8" placeholder="Pega aquí transcripciones, notas, datos de usuarios..."></textarea></label>
+                <label class="quantity-field">Cantidad máxima a extraer<input type="number" name="quantity" min="1" max="20" value="3" required /></label>
+                <div class="form-actions">
+                  <button type="submit" id="persona-upload-submit">Extraer personas</button>
+                  <button type="button" class="ghost-button" id="persona-upload-reset">Limpiar</button>
+                </div>
+              </form>
+
+              <form id="persona-form" class="form-grid persona-mode-form advanced-form">
                 <input type="hidden" name="id" />
                 <label>Nombre<input name="name" required /></label>
                 <label>Descripcion<textarea name="description" rows="2"></textarea></label>
@@ -485,6 +512,21 @@
         <ul class="error-modal__list hidden" id="error-modal-list"></ul>
         <div class="confirm-modal__actions">
           <button class="button" type="button" id="error-modal-close">Entendido</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-backdrop hidden" id="persona-preview-modal" aria-hidden="true">
+      <div class="persona-preview" role="dialog" aria-modal="true" aria-labelledby="persona-preview-title">
+        <div class="confirm-modal__header">
+          <p class="eyebrow">Preview</p>
+          <h3 id="persona-preview-title">Personas propuestas por IA</h3>
+        </div>
+        <p class="confirm-modal__body" id="persona-preview-body">Revisa cada persona, descarta las que no quieras y confirma para guardarlas.</p>
+        <div id="persona-preview-list" class="persona-preview__list"></div>
+        <div class="confirm-modal__actions">
+          <button class="ghost-button" type="button" id="persona-preview-cancel">Cancelar</button>
+          <button type="button" id="persona-preview-confirm">Guardar seleccionadas</button>
         </div>
       </div>
     </div>

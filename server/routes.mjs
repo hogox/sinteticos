@@ -1,6 +1,7 @@
 import path from "node:path";
 import { PROJECT_ROOT } from "./config.mjs";
 import { checkFigmaAvailability } from "../figma-mcp-client.mjs";
+import { generatePersonas, extractPersonas } from "./anthropic.mjs";
 
 export function createRouteHandler(deps) {
   const { readState, writeState, readJson, serveFile, sendJson, uid, safeExecuteRun, getPlaywright, buildInitialState } = deps;
@@ -44,6 +45,28 @@ export function createRouteHandler(deps) {
         });
         await writeState(state);
         return sendJson(res, 200, { state });
+      }
+
+      if (url.pathname === "/api/personas/ai-generate" && req.method === "POST") {
+        const payload = await readJson(req);
+        try {
+          const personas = await generatePersonas(payload.description, payload.quantity);
+          return sendJson(res, 200, { personas });
+        } catch (error) {
+          const status = error.code === "ANTHROPIC_KEY_MISSING" ? 503 : error.code === "INVALID_INPUT" ? 400 : 502;
+          return sendJson(res, status, { error: error.message, code: error.code || "ANTHROPIC_ERROR" });
+        }
+      }
+
+      if (url.pathname === "/api/personas/ai-extract" && req.method === "POST") {
+        const payload = await readJson(req);
+        try {
+          const personas = await extractPersonas(payload.source_text, payload.quantity);
+          return sendJson(res, 200, { personas });
+        } catch (error) {
+          const status = error.code === "ANTHROPIC_KEY_MISSING" ? 503 : error.code === "INVALID_INPUT" ? 400 : 502;
+          return sendJson(res, status, { error: error.message, code: error.code || "ANTHROPIC_ERROR" });
+        }
       }
 
       if (url.pathname === "/api/personas" && req.method === "POST") {

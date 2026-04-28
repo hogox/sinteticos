@@ -17,6 +17,14 @@ import { resetProjectForm, resetPersonaForm, resetTaskForm } from "./forms.js";
 import { closeConfirmation, closeErrorModal } from "./confirmation.js";
 import { ensureSelection } from "./state-ops.js";
 import { exportState, resetDemoData } from "./export.js";
+import {
+  setPersonaCreateMode,
+  onPersonaSimpleSubmit,
+  onPersonaUploadSubmit,
+  resetSimpleForm,
+  resetUploadForm,
+  bindPersonaPreviewEvents
+} from "./persona-modes.js";
 
 export function bindEvents() {
   document.addEventListener("click", onClick);
@@ -27,6 +35,11 @@ export function bindEvents() {
   document.getElementById("calibration-form").addEventListener("submit", onCalibrationSubmit);
   document.getElementById("project-reset").addEventListener("click", resetProjectForm);
   document.getElementById("persona-reset").addEventListener("click", resetPersonaForm);
+  document.getElementById("persona-simple-form").addEventListener("submit", onPersonaSimpleSubmit);
+  document.getElementById("persona-upload-form").addEventListener("submit", onPersonaUploadSubmit);
+  document.getElementById("persona-simple-reset").addEventListener("click", resetSimpleForm);
+  document.getElementById("persona-upload-reset").addEventListener("click", resetUploadForm);
+  bindPersonaPreviewEvents();
   document.getElementById("task-reset").addEventListener("click", resetTaskForm);
   document.getElementById("seed-demo").addEventListener("click", resetDemoData);
   document.getElementById("export-state").addEventListener("click", exportState);
@@ -131,6 +144,12 @@ export function onClick(event) {
   if (detailView) {
     ui.runDetailView = detailView.dataset.detailView;
     renderRuns();
+    return;
+  }
+
+  const personaModeBtn = event.target.closest("[data-persona-mode]");
+  if (personaModeBtn) {
+    setPersonaCreateMode(personaModeBtn.dataset.personaMode);
   }
 }
 
