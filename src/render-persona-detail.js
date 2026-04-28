@@ -343,7 +343,7 @@ function renderConversationTabs(conversations, selectedConversationId) {
 }
 
 function renderAnchorOptions(runs, selectedRunId) {
-  const options = [`<option value="">Sin run anclado</option>`];
+  const options = [`<option value="">Sin run específico</option>`];
   runs.forEach((run) => {
     const task = getTaskById(run.task_id, getState());
     const label = `${formatShortDate(run.started_at)} · ${run.completion_status} · ${task ? task.prompt.slice(0, 56) : run.id}`;
@@ -354,8 +354,10 @@ function renderAnchorOptions(runs, selectedRunId) {
 
 function renderMessages(thread) {
   if (!thread || !thread.messages?.length) {
-    return emptyStateMarkup("Inicia una conversación para explorar cómo piensa esta persona dentro de su contexto.");
+    return emptyStateMarkup("Escribe una pregunta para que responda desde su perfil, historial y contexto.");
   }
+
+  const showEvidenceMetadata = thread.mode === "evidence";
 
   return thread.messages
     .map((message) => {
@@ -365,12 +367,16 @@ function renderMessages(thread) {
         <article class="chat-message ${personaMessage ? "chat-message--persona" : "chat-message--user"}">
           <div class="chat-message__meta">
             <strong>${personaMessage ? "Persona" : "Tú"}</strong>
-            ${message.evidence_mode ? `<span class="status-pill ${evidenceClass(message.evidence_mode)}">${escapeHtml(message.evidence_mode)}</span>` : ""}
+            ${
+              showEvidenceMetadata && message.evidence_mode
+                ? `<span class="status-pill ${evidenceClass(message.evidence_mode)}">${escapeHtml(message.evidence_mode)}</span>`
+                : ""
+            }
             ${messageTime(message) ? `<span class="pill">${messageTime(message)}</span>` : ""}
           </div>
           <p>${escapeHtml(message.content)}</p>
           ${
-            personaMessage && (citations.run_ids?.length || citations.task_ids?.length || message.reasoning_note)
+            showEvidenceMetadata && personaMessage && (citations.run_ids?.length || citations.task_ids?.length || message.reasoning_note)
               ? `
                 <div class="chat-message__evidence">
                   ${message.reasoning_note ? `<span class="pill">${escapeHtml(message.reasoning_note)}</span>` : ""}
@@ -411,12 +417,12 @@ function renderPersonaChat({ conversations, selectedThread, runs, ui }) {
             <label>
               Modo
               <select name="mode">
-                <option value="free" ${selectedMode === "free" ? "selected" : ""}>Conversación libre</option>
-                <option value="evidence" ${selectedMode === "evidence" ? "selected" : ""}>Anclado a evidencia</option>
+                <option value="free" ${selectedMode === "free" ? "selected" : ""}>Conversar con la persona</option>
+                <option value="evidence" ${selectedMode === "evidence" ? "selected" : ""}>Preguntar sobre evidencia</option>
               </select>
             </label>
             <label>
-              Run
+              Run de referencia
               <select name="anchorRunId">
                 ${renderAnchorOptions(runs, selectedAnchor)}
               </select>
@@ -424,7 +430,7 @@ function renderPersonaChat({ conversations, selectedThread, runs, ui }) {
           </div>
           <label>
             Mensaje
-            <textarea name="content" rows="3" placeholder="Pregúntale por una decisión, fricción o expectativa..." ${ui.personaChatBusy ? "disabled" : ""} required></textarea>
+            <textarea name="content" rows="3" placeholder="Pregúntale qué piensa, qué espera o qué le incomoda..." ${ui.personaChatBusy ? "disabled" : ""} required></textarea>
           </label>
           <div class="form-actions">
             <button type="submit" ${ui.personaChatBusy ? "disabled" : ""}>${ui.personaChatBusy ? "Respondiendo..." : "Enviar"}</button>
