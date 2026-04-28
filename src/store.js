@@ -4,6 +4,7 @@ let ui = {
   section: "projects",
   selectedProjectId: null,
   selectedPersonaId: null,
+  personaDetailId: null,
   selectedTaskId: null,
   selectedRunId: null,
   editingProjectId: null,
@@ -13,6 +14,10 @@ let ui = {
   runDetailView: "observed",
   personaCreateMode: "advanced",
   personaPreview: null,
+  selectedConversationId: null,
+  personaChatMode: "free",
+  personaChatAnchorRunId: "",
+  personaChatBusy: false,
   filters: {
     personaId: "all",
     taskId: "all",

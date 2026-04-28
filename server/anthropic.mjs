@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { buildLocalPersonaReply, buildPersonaChatContext } from "../shared/persona-chat.js";
 
 const MODEL = "claude-sonnet-4-6";
 const MAX_TOKENS = 8192;
@@ -127,4 +128,79 @@ export async function extractPersonas(sourceText, quantity) {
 
 export function isAnthropicConfigured() {
   return Boolean(process.env.ANTHROPIC_API_KEY);
+}
+
+function parseJsonReply(text) {
+  const raw = String(text || "").trim();
+  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = fenced ? fenced[1].trim() : raw;
+  return JSON.parse(candidate);
+}
+
+export async function generatePersonaChatReply({ persona, project, tasks, runs, thread, message, mode, anchorRunId }) {
+  const fallback = () =>
+    buildLocalPersonaReply({
+      persona,
+      project,
+      tasks,
+      runs,
+      message,
+      mode,
+      anchorRunId,
+      history: thread?.messages || []
+    });
+
+  if (!isAnthropicConfigured()) {
+    return fallback();
+  }
+
+  try {
+    const anthropic = getClient();
+    const context = buildPersonaChatContext({
+      persona,
+      project,
+      tasks,
+      runs,
+      anchorRunId,
+      history: thread?.messages || []
+    });
+    const system = [
+      "Eres una persona sintética dentro de un laboratorio de investigación UX.",
+      "Responde siempre en primera persona y desde el rol, segmento, restricciones, nivel digital y contexto de la persona.",
+      "No respondas como analista, diseñador, PM, sistema ni consultor.",
+      "No inventes acciones observadas. Si dices que viste, hiciste, navegaste, clickeaste o abandonaste algo, debe estar respaldado por runs del contexto.",
+      "Clasifica cada respuesta como observed, inferred o unknown.",
+      "observed: usas evidencia directa de runs, pasos, pantallas, clicks o findings.",
+      "inferred: interpretas desde el perfil o desde evidencia indirecta sin afirmar una acción nueva.",
+      "unknown: no hay base suficiente en perfil ni runs.",
+      "Devuelve exclusivamente JSON válido con keys reply, evidence_mode, reasoning_note y citations.",
+      "citations debe incluir run_ids y task_ids como arrays."
+    ].join(" ");
+    const user = JSON.stringify({ mode, anchor_run_id: anchorRunId || null, context, user_message: message }, null, 2);
+    const response = await anthropic.messages.create({
+      model: MODEL,
+      max_tokens: 1200,
+      system,
+      messages: [{ role: "user", content: user }]
+    });
+    const text = response.content
+      .filter((block) => block.type === "text")
+      .map((block) => block.text)
+      .join("\n");
+    const parsed = parseJsonReply(text);
+    if (!parsed || !parsed.reply || !["observed", "inferred", "unknown"].includes(parsed.evidence_mode)) {
+      return fallback();
+    }
+    return {
+      reply: String(parsed.reply),
+      evidence_mode: parsed.evidence_mode,
+      reasoning_note: String(parsed.reasoning_note || ""),
+      citations: {
+        run_ids: Array.isArray(parsed.citations?.run_ids) ? parsed.citations.run_ids : [],
+        task_ids: Array.isArray(parsed.citations?.task_ids) ? parsed.citations.task_ids : []
+      }
+    };
+  } catch (error) {
+    return fallback();
+  }
 }

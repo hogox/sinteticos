@@ -4,6 +4,7 @@ import { getPersonaById, getProjectById, getTaskById, getRunById } from "./utils
 import { STORAGE_KEY } from "./constants.js";
 import { simulateRun } from "../shared/simulation.js";
 import { buildInitialState } from "../shared/seed-data.js";
+import { buildLocalPersonaReply } from "../shared/persona-chat.js";
 
 export function localCreateProject(payload) {
   const state = getState();
@@ -38,7 +39,8 @@ export function localDeleteProject(id) {
     personas: state.personas.filter((item) => item.project_id !== id),
     tasks: state.tasks.filter((item) => item.project_id !== id),
     runs: state.runs.filter((item) => item.project_id !== id && !taskIds.includes(item.task_id) && !personaIds.includes(item.persona_id)),
-    calibrations: state.calibrations.filter((item) => item.project_id !== id)
+    calibrations: state.calibrations.filter((item) => item.project_id !== id),
+    persona_conversations: (state.persona_conversations || []).filter((item) => item.project_id !== id)
   };
 }
 
@@ -96,7 +98,11 @@ export function localArchivePersona(id) {
 
 export function localDeletePersona(id) {
   const state = getState();
-  return { ...state, personas: state.personas.filter((item) => item.id !== id) };
+  return {
+    ...state,
+    personas: state.personas.filter((item) => item.id !== id),
+    persona_conversations: (state.persona_conversations || []).filter((item) => item.persona_id !== id)
+  };
 }
 
 export function localCreateTask(payload) {
@@ -156,7 +162,73 @@ export function localDeleteRun(id) {
 }
 
 export function emptyState() {
-  return { projects: [], personas: [], tasks: [], runs: [], calibrations: [] };
+  return { projects: [], personas: [], tasks: [], runs: [], calibrations: [], persona_conversations: [] };
+}
+
+export function localCreatePersonaConversation(personaId, payload = {}) {
+  const state = getState();
+  const persona = getPersonaById(personaId, state);
+  if (!persona) {
+    return state;
+  }
+  const now = new Date().toISOString();
+  const conversation = {
+    id: uid("thread"),
+    project_id: persona.project_id,
+    persona_id: persona.id,
+    title: payload.title || "Chat principal",
+    mode: payload.mode === "evidence" ? "evidence" : "free",
+    anchor_run_id: payload.anchorRunId || null,
+    messages: [],
+    created_at: now,
+    updated_at: now
+  };
+  return { ...state, persona_conversations: [conversation, ...(state.persona_conversations || [])] };
+}
+
+export function localSendPersonaMessage(personaId, threadId, payload = {}) {
+  const state = getState();
+  const persona = getPersonaById(personaId, state);
+  const thread = (state.persona_conversations || []).find((item) => item.id === threadId && item.persona_id === personaId);
+  if (!persona || !thread) {
+    return state;
+  }
+  const now = new Date().toISOString();
+  const mode = payload.mode === "evidence" ? "evidence" : thread.mode || "free";
+  const anchorRunId = payload.anchorRunId || thread.anchor_run_id || null;
+  const project = getProjectById(persona.project_id, state);
+  const tasks = (state.tasks || []).filter((task) => task.persona_id === persona.id);
+  const runs = (state.runs || []).filter((run) => run.persona_id === persona.id);
+  const userMessage = {
+    id: uid("msg"),
+    role: "user",
+    content: String(payload.content || "").trim(),
+    created_at: now
+  };
+  const reply = buildLocalPersonaReply({ persona, project, tasks, runs, message: userMessage.content, mode, anchorRunId, history: thread.messages });
+  const personaMessage = {
+    id: uid("msg"),
+    role: "persona",
+    content: reply.reply,
+    evidence_mode: reply.evidence_mode,
+    reasoning_note: reply.reasoning_note,
+    citations: reply.citations,
+    created_at: new Date().toISOString()
+  };
+  return {
+    ...state,
+    persona_conversations: (state.persona_conversations || []).map((item) =>
+      item.id === thread.id
+        ? {
+            ...item,
+            mode,
+            anchor_run_id: anchorRunId,
+            messages: [...item.messages, userMessage, personaMessage],
+            updated_at: personaMessage.created_at
+          }
+        : item
+    )
+  };
 }
 
 export function loadLocalState() {
@@ -176,7 +248,11 @@ export function loadLocalState() {
       persistLocalState(seeded);
       return seeded;
     }
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed.persona_conversations)) {
+      parsed.persona_conversations = [];
+    }
+    return parsed;
   } catch (error) {
     const seeded = buildInitialState(uid, (task, persona, iteration) =>
       simulateRun(task, persona, iteration, {
@@ -206,6 +282,13 @@ export function ensureSelection() {
   }
   if (!ui.selectedPersonaId || !getPersonaById(ui.selectedPersonaId, state) || getPersonaById(ui.selectedPersonaId, state)?.project_id !== ui.selectedProjectId) {
     ui.selectedPersonaId = state.personas.find((item) => item.project_id === ui.selectedProjectId)?.id || null;
+  }
+  if (
+    !ui.personaDetailId ||
+    !getPersonaById(ui.personaDetailId, state) ||
+    getPersonaById(ui.personaDetailId, state)?.project_id !== ui.selectedProjectId
+  ) {
+    ui.personaDetailId = ui.selectedPersonaId;
   }
   if (!ui.selectedTaskId || !getTaskById(ui.selectedTaskId, state) || getTaskById(ui.selectedTaskId, state)?.project_id !== ui.selectedProjectId) {
     ui.selectedTaskId = state.tasks.find((item) => item.project_id === ui.selectedProjectId)?.id || null;

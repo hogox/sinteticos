@@ -205,6 +205,53 @@ export async function onCalibrationSubmit(event) {
   event.currentTarget.reset();
 }
 
+export async function onPersonaChatSubmit(event) {
+  event.preventDefault();
+  const ui = getUi();
+  const state = getState();
+  const persona = getPersonaById(ui.personaDetailId, state);
+  if (!persona || ui.personaChatBusy) {
+    return;
+  }
+
+  const formData = new FormData(event.target);
+  const content = value(formData, "content");
+  if (!content) {
+    return;
+  }
+
+  const mode = value(formData, "mode") || ui.personaChatMode || "free";
+  const anchorRunId = value(formData, "anchorRunId");
+  ui.personaChatMode = mode;
+  ui.personaChatAnchorRunId = anchorRunId;
+  ui.personaChatBusy = true;
+  render();
+
+  try {
+    let threadId = ui.selectedConversationId;
+    const existingThread = (getState().persona_conversations || []).find((item) => item.id === threadId && item.persona_id === persona.id);
+    if (!existingThread) {
+      setState(await api.createPersonaConversation(persona.id, { mode, anchorRunId }));
+      const nextThread = (getState().persona_conversations || []).find((item) => item.persona_id === persona.id);
+      threadId = nextThread ? nextThread.id : null;
+      ui.selectedConversationId = threadId;
+    }
+    if (!threadId) {
+      return;
+    }
+    setState(await api.sendPersonaMessage(persona.id, threadId, { content, mode, anchorRunId }));
+  } catch (error) {
+    alertError({
+      title: "No se pudo enviar el mensaje",
+      body: error.message || "El chat no pudo guardar o responder el mensaje."
+    });
+  } finally {
+    ui.personaChatBusy = false;
+    ensureSelection();
+    render();
+  }
+}
+
 export async function handleProjectAction(action, id) {
   const state = getState();
   const ui = getUi();
@@ -289,9 +336,59 @@ export async function handlePersonaAction(action, id) {
       return;
     }
     setState(await api.deletePersona(id));
+    if (ui.personaDetailId === id) {
+      ui.personaDetailId = null;
+      if (ui.section === "persona-detail") {
+        ui.section = "personas";
+      }
+    }
     ensureSelection();
     render();
   }
+}
+
+export async function handlePersonaDetailAction(action, id) {
+  const state = getState();
+  const ui = getUi();
+
+  if (action === "back") {
+    ui.section = "personas";
+    render();
+    return;
+  }
+
+  if (action === "select-chat") {
+    ui.selectedConversationId = id;
+    render();
+    return;
+  }
+
+  const personaId = action === "edit" ? id || ui.personaDetailId : ui.personaDetailId;
+  const persona = getPersonaById(personaId, state);
+
+  if (!persona) {
+    return;
+  }
+
+  if (action === "edit") {
+    ui.section = "personas";
+    ui.editingPersonaId = persona.id;
+    ui.personaCreateMode = "advanced";
+    const { setPersonaCreateMode } = await import("./persona-modes.js");
+    setPersonaCreateMode("advanced");
+    fillPersonaForm(persona);
+    render();
+    return;
+  }
+
+  if (action === "new-chat") {
+    setState(await api.createPersonaConversation(persona.id, { mode: ui.personaChatMode, anchorRunId: ui.personaChatAnchorRunId }));
+    const thread = (getState().persona_conversations || []).find((item) => item.persona_id === persona.id);
+    ui.selectedConversationId = thread ? thread.id : null;
+    render();
+    return;
+  }
+
 }
 
 export async function handleTaskAction(action, id) {
