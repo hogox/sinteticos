@@ -2,3 +2,4 @@
 node_modules/
 artifacts/
 data/state.json
+.env.local
