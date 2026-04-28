@@ -1,8 +1,10 @@
 import { getState, getUi, getRuntime } from "./store.js";
 import { POLICY, getSectionTitle, getSections, getNavTabs, getTopbarActions } from "./constants.js";
-import { requiresProject, getProjectById } from "./utils.js";
+import { requiresProject, getProjectById, getPersonaById } from "./utils.js";
 import { renderProjects, renderPersonas, renderTasks, renderRuns, renderCalibration } from "./render-entities.js";
 import { renderDashboard } from "./render-dashboard.js";
+import { renderPersonaDetail } from "./render-persona-detail.js";
+import { syncHashWithUi } from "./router.js";
 
 export function render() {
   renderSection();
@@ -10,10 +12,12 @@ export function render() {
   renderPolicy();
   renderProjects();
   renderPersonas();
+  renderPersonaDetail();
   renderTasks();
   renderRuns();
   renderCalibration();
   renderDashboard();
+  syncHashWithUi();
 }
 
 export function renderSection() {
@@ -27,14 +31,28 @@ export function renderSection() {
   if (!ui.selectedProjectId && ui.section === "dashboard") {
     ui.section = "projects";
   }
+  if (ui.section === "persona-detail" && !getPersonaById(ui.personaDetailId, getState())) {
+    ui.section = "personas";
+  }
   navTabs.forEach((tab) => {
     const shouldHide = tab.dataset.section !== "projects" && !ui.selectedProjectId;
     tab.classList.toggle("hidden", shouldHide);
   });
-  navTabs.forEach((tab) => tab.classList.toggle("is-active", tab.dataset.section === ui.section));
+  navTabs.forEach((tab) =>
+    tab.classList.toggle("is-active", tab.dataset.section === ui.section || (ui.section === "persona-detail" && tab.dataset.section === "personas"))
+  );
   navTabs.forEach((tab) => tab.classList.toggle("is-disabled", !ui.selectedProjectId && requiresProject(tab.dataset.section)));
   sections.forEach((section) => section.classList.toggle("is-active", section.id === `section-${ui.section}`));
-  sectionTitle.textContent = ui.section === "projects" ? "Projects" : ui.section.charAt(0).toUpperCase() + ui.section.slice(1);
+  if (ui.section === "projects") {
+    sectionTitle.textContent = "Projects";
+    return;
+  }
+  if (ui.section === "persona-detail") {
+    const persona = getPersonaById(ui.personaDetailId, getState());
+    sectionTitle.textContent = persona ? persona.name : "Persona";
+    return;
+  }
+  sectionTitle.textContent = ui.section.charAt(0).toUpperCase() + ui.section.slice(1);
 }
 
 export function renderRuntimeBadge() {

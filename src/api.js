@@ -17,6 +17,8 @@ import {
   localCreateRuns,
   localCreateCalibration,
   localDeleteRun,
+  localCreatePersonaConversation,
+  localSendPersonaMessage,
   loadLocalState,
   persistLocalState
 } from "./state-ops.js";
@@ -206,6 +208,31 @@ function createApi() {
         return (await request(`/api/runs/${id}`, { method: "DELETE" })).state;
       }
       const next = localDeleteRun(id);
+      persistLocalState(next);
+      return next;
+    },
+
+    async createPersonaConversation(personaId, payload) {
+      const runtime = getRuntime();
+      if (runtime.backend) {
+        return (await request(`/api/personas/${personaId}/conversations`, { method: "POST", body: JSON.stringify(payload) })).state;
+      }
+      const next = localCreatePersonaConversation(personaId, payload);
+      persistLocalState(next);
+      return next;
+    },
+
+    async sendPersonaMessage(personaId, threadId, payload) {
+      const runtime = getRuntime();
+      if (runtime.backend) {
+        return (
+          await request(`/api/personas/${personaId}/conversations/${threadId}/messages`, {
+            method: "POST",
+            body: JSON.stringify(payload)
+          })
+        ).state;
+      }
+      const next = localSendPersonaMessage(personaId, threadId, payload);
       persistLocalState(next);
       return next;
     },

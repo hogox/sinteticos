@@ -70,9 +70,10 @@ export function migrateState(state) {
     personas: Array.isArray(state.personas) ? [...state.personas] : [],
     tasks: Array.isArray(state.tasks) ? [...state.tasks] : [],
     runs: Array.isArray(state.runs) ? [...state.runs] : [],
-    calibrations: Array.isArray(state.calibrations) ? [...state.calibrations] : []
+    calibrations: Array.isArray(state.calibrations) ? [...state.calibrations] : [],
+    persona_conversations: Array.isArray(state.persona_conversations) ? [...state.persona_conversations] : []
   };
-  let changed = !Array.isArray(state.projects);
+  let changed = !Array.isArray(state.projects) || !Array.isArray(state.persona_conversations);
   const now = new Date().toISOString();
 
   if (!next.projects.length && (next.personas.length || next.tasks.length || next.runs.length || next.calibrations.length)) {
@@ -125,6 +126,17 @@ export function migrateState(state) {
         fallbackProjectId
     };
   });
+
+  next.persona_conversations = next.persona_conversations
+    .filter((item) => item && item.persona_id && item.project_id)
+    .map((item) => ({
+      ...item,
+      mode: item.mode === "evidence" ? "evidence" : "free",
+      anchor_run_id: item.anchor_run_id || null,
+      messages: Array.isArray(item.messages) ? item.messages : [],
+      updated_at: item.updated_at || item.created_at || now,
+      created_at: item.created_at || now
+    }));
 
   next.projects = next.projects.map((item) => ({
     ...item,

@@ -1,7 +1,7 @@
 import path from "node:path";
 import { PROJECT_ROOT } from "./config.mjs";
 import { checkFigmaAvailability } from "../figma-mcp-client.mjs";
-import { generatePersonas, extractPersonas } from "./anthropic.mjs";
+import { generatePersonas, extractPersonas, generatePersonaChatReply } from "./anthropic.mjs";
 
 export function createRouteHandler(deps) {
   const { readState, writeState, readJson, serveFile, sendJson, uid, safeExecuteRun, getPlaywright, buildInitialState } = deps;
@@ -119,6 +119,8 @@ export function createRouteHandler(deps) {
       const personaMatch = url.pathname.match(/^\/api\/personas\/([^/]+)$/);
       const personaDuplicateMatch = url.pathname.match(/^\/api\/personas\/([^/]+)\/duplicate$/);
       const personaArchiveMatch = url.pathname.match(/^\/api\/personas\/([^/]+)\/archive$/);
+      const personaConversationsMatch = url.pathname.match(/^\/api\/personas\/([^/]+)\/conversations$/);
+      const personaConversationMessagesMatch = url.pathname.match(/^\/api\/personas\/([^/]+)\/conversations\/([^/]+)\/messages$/);
       const taskMatch = url.pathname.match(/^\/api\/tasks\/([^/]+)$/);
       const taskRunsMatch = url.pathname.match(/^\/api\/tasks\/([^/]+)\/runs$/);
       const runMatch = url.pathname.match(/^\/api\/runs\/([^/]+)$/);
@@ -149,6 +151,7 @@ export function createRouteHandler(deps) {
         state.personas = state.personas.filter((item) => item.project_id !== projectId);
         state.tasks = state.tasks.filter((item) => item.project_id !== projectId);
         state.calibrations = state.calibrations.filter((item) => item.project_id !== projectId);
+        state.persona_conversations = (state.persona_conversations || []).filter((item) => item.project_id !== projectId);
         state.runs = state.runs.filter(
           (item) => item.project_id !== projectId && !taskIds.includes(item.task_id) && !personaIds.includes(item.persona_id)
         );
@@ -169,6 +172,91 @@ export function createRouteHandler(deps) {
       if (personaMatch && req.method === "DELETE") {
         const state = await readState();
         state.personas = state.personas.filter((item) => item.id !== personaMatch[1]);
+        state.persona_conversations = (state.persona_conversations || []).filter((item) => item.persona_id !== personaMatch[1]);
+        await writeState(state);
+        return sendJson(res, 200, { state });
+      }
+
+      if (personaConversationsMatch && req.method === "POST") {
+        const state = await readState();
+        const persona = state.personas.find((item) => item.id === personaConversationsMatch[1]);
+        if (!persona) {
+          return sendJson(res, 404, { error: "Persona not found" });
+        }
+        const payload = await readJson(req);
+        const now = new Date().toISOString();
+        const conversation = {
+          id: uid("thread"),
+          project_id: persona.project_id,
+          persona_id: persona.id,
+          title: payload.title || "Chat principal",
+          mode: payload.mode === "evidence" ? "evidence" : "free",
+          anchor_run_id: payload.anchorRunId || null,
+          messages: [],
+          created_at: now,
+          updated_at: now
+        };
+        state.persona_conversations = [conversation, ...(state.persona_conversations || [])];
+        await writeState(state);
+        return sendJson(res, 200, { state, conversation });
+      }
+
+      if (personaConversationMessagesMatch && req.method === "POST") {
+        const state = await readState();
+        const personaId = personaConversationMessagesMatch[1];
+        const threadId = personaConversationMessagesMatch[2];
+        const persona = state.personas.find((item) => item.id === personaId);
+        const thread = (state.persona_conversations || []).find((item) => item.id === threadId && item.persona_id === personaId);
+        if (!persona || !thread) {
+          return sendJson(res, 404, { error: "Conversation not found" });
+        }
+        const payload = await readJson(req);
+        const content = String(payload.content || "").trim();
+        if (!content) {
+          return sendJson(res, 400, { error: "Message is empty" });
+        }
+        const mode = payload.mode === "evidence" ? "evidence" : thread.mode || "free";
+        const anchorRunId = payload.anchorRunId || thread.anchor_run_id || null;
+        const project = state.projects.find((item) => item.id === persona.project_id) || null;
+        const tasks = state.tasks.filter((item) => item.persona_id === persona.id);
+        const runs = state.runs.filter((item) => item.persona_id === persona.id);
+        const now = new Date().toISOString();
+        const userMessage = {
+          id: uid("msg"),
+          role: "user",
+          content,
+          created_at: now
+        };
+        const reply = await generatePersonaChatReply({
+          persona,
+          project,
+          tasks,
+          runs,
+          thread,
+          message: content,
+          mode,
+          anchorRunId
+        });
+        const personaMessage = {
+          id: uid("msg"),
+          role: "persona",
+          content: reply.reply,
+          evidence_mode: reply.evidence_mode,
+          reasoning_note: reply.reasoning_note,
+          citations: reply.citations,
+          created_at: new Date().toISOString()
+        };
+        state.persona_conversations = (state.persona_conversations || []).map((item) =>
+          item.id === thread.id
+            ? {
+                ...item,
+                mode,
+                anchor_run_id: anchorRunId,
+                messages: [...item.messages, userMessage, personaMessage],
+                updated_at: personaMessage.created_at
+              }
+            : item
+        );
         await writeState(state);
         return sendJson(res, 200, { state });
       }

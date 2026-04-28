@@ -4,14 +4,16 @@ import {
   onTaskSubmit,
   onRunSubmit,
   onCalibrationSubmit,
+  onPersonaChatSubmit,
   handleProjectAction,
   handlePersonaAction,
+  handlePersonaDetailAction,
   handleTaskAction,
   handleRunAction
 } from "./handlers.js";
 import { getUi } from "./store.js";
 import { render } from "./render.js";
-import { renderRuns, renderPersonas, renderTasks } from "./render-entities.js";
+import { renderRuns, renderTasks } from "./render-entities.js";
 import { renderDashboard } from "./render-dashboard.js";
 import { resetProjectForm, resetPersonaForm, resetTaskForm } from "./forms.js";
 import { closeConfirmation, closeErrorModal } from "./confirmation.js";
@@ -28,6 +30,8 @@ import {
 
 export function bindEvents() {
   document.addEventListener("click", onClick);
+  document.addEventListener("keydown", onKeydown);
+  document.addEventListener("submit", onDynamicSubmit);
   document.getElementById("project-form").addEventListener("submit", onProjectSubmit);
   document.getElementById("persona-form").addEventListener("submit", onPersonaSubmit);
   document.getElementById("task-form").addEventListener("submit", onTaskSubmit);
@@ -62,6 +66,12 @@ export function bindEvents() {
   });
 }
 
+function onDynamicSubmit(event) {
+  if (event.target.id === "persona-chat-form") {
+    onPersonaChatSubmit(event);
+  }
+}
+
 export function onClick(event) {
   const ui = getUi();
 
@@ -90,6 +100,12 @@ export function onClick(event) {
   const personaAction = event.target.closest("[data-persona-action]");
   if (personaAction) {
     handlePersonaAction(personaAction.dataset.personaAction, personaAction.dataset.id);
+    return;
+  }
+
+  const personaDetailAction = event.target.closest("[data-persona-detail-action]");
+  if (personaDetailAction) {
+    handlePersonaDetailAction(personaDetailAction.dataset.personaDetailAction, personaDetailAction.dataset.id);
     return;
   }
 
@@ -127,8 +143,9 @@ export function onClick(event) {
   const personaCard = event.target.closest("[data-persona-id]");
   if (personaCard) {
     ui.selectedPersonaId = personaCard.dataset.personaId;
-    renderPersonas();
-    renderDashboard();
+    ui.personaDetailId = personaCard.dataset.personaId;
+    ui.section = "persona-detail";
+    render();
     return;
   }
 
@@ -161,4 +178,23 @@ export function onFilterChange(event) {
   }
   ui.filters[filter] = event.target.value;
   renderDashboard();
+}
+
+export function onKeydown(event) {
+  if (!["Enter", " "].includes(event.key)) {
+    return;
+  }
+  if (event.target.closest("button, input, textarea, select, summary")) {
+    return;
+  }
+  const personaCard = event.target.closest("[data-persona-id]");
+  if (!personaCard) {
+    return;
+  }
+  event.preventDefault();
+  const ui = getUi();
+  ui.selectedPersonaId = personaCard.dataset.personaId;
+  ui.personaDetailId = personaCard.dataset.personaId;
+  ui.section = "persona-detail";
+  render();
 }

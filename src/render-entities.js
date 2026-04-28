@@ -68,7 +68,7 @@ export function renderPersonas() {
       const selected = persona.id === ui.selectedPersonaId ? " is-selected" : "";
       const runCount = state.runs.filter((run) => run.persona_id === persona.id).length;
       return `
-        <article class="list-card${selected}" data-persona-id="${persona.id}">
+        <article class="list-card list-card--interactive${selected}" data-persona-id="${persona.id}" role="button" tabindex="0" aria-label="Abrir ficha de ${escapeHtml(persona.name)}">
           <header>
             <div>
               <strong>${escapeHtml(persona.name)}</strong>
