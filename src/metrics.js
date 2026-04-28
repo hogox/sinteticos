@@ -60,7 +60,9 @@ export function metricCard(label, valueText, caption) {
   return `
     <article class="metric-card">
       <div class="metric-label">${label}</div>
-      <strong class="metric-value">${valueText}</strong>
+      <div class="metric-value-row">
+        <strong class="metric-value">${valueText}</strong>
+      </div>
       <p class="metric-caption">${caption}</p>
     </article>
   `;

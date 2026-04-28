@@ -44,7 +44,7 @@ export function renderProjects() {
               ${project.id === ui.selectedProjectId ? "Abrir dashboard" : "Seleccionar"}
             </button>
             <button class="ghost-button" data-project-action="edit" data-id="${project.id}">Editar</button>
-            <button class="ghost-button" data-project-action="delete" data-id="${project.id}">Borrar</button>
+            <button class="danger-button" data-project-action="delete" data-id="${project.id}">Borrar</button>
           </div>
         </article>
       `;
@@ -86,7 +86,7 @@ export function renderPersonas() {
             <button class="ghost-button" data-persona-action="edit" data-id="${persona.id}">Editar</button>
             <button class="ghost-button" data-persona-action="duplicate" data-id="${persona.id}">Duplicar</button>
             <button class="ghost-button" data-persona-action="archive" data-id="${persona.id}">${persona.status === "archived" ? "Activar" : "Archivar"}</button>
-            <button class="ghost-button" data-persona-action="delete" data-id="${persona.id}">Borrar</button>
+            <button class="danger-button" data-persona-action="delete" data-id="${persona.id}">Borrar</button>
           </div>
         </article>
       `;
@@ -133,7 +133,7 @@ export function renderTasks() {
           <div class="action-row">
             <button class="ghost-button" data-task-action="edit" data-id="${task.id}">Editar</button>
             <button class="ghost-button" data-task-action="clone-run" data-id="${task.id}">Correr</button>
-            <button class="ghost-button" data-task-action="delete" data-id="${task.id}">Borrar</button>
+            <button class="danger-button" data-task-action="delete" data-id="${task.id}">Borrar</button>
           </div>
         </article>
       `;
@@ -179,7 +179,7 @@ export function renderRuns() {
           </div>
           <p>${escapeHtml(run.report_summary)}</p>
           <div class="action-row">
-            <button class="ghost-button" data-run-action="delete" data-id="${run.id}">Borrar run</button>
+            <button class="danger-button" data-run-action="delete" data-id="${run.id}">Borrar run</button>
           </div>
         </article>
       `;
