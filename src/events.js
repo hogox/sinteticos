@@ -11,9 +11,10 @@ import {
   handleTaskAction,
   handleRunAction
 } from "./handlers.js";
-import { getUi } from "./store.js";
+import { getUi, getState, setSkillsCache } from "./store.js";
 import { render } from "./render.js";
 import { renderRuns, renderTasks } from "./render-entities.js";
+import { api } from "./api.js";
 import { renderDashboard } from "./render-dashboard.js";
 import { resetProjectForm, resetPersonaForm, resetTaskForm } from "./forms.js";
 import { closeConfirmation, closeErrorModal } from "./confirmation.js";
@@ -74,8 +75,57 @@ function onDynamicSubmit(event) {
   }
 }
 
+async function handleSkillAnalyze() {
+  const ui = getUi();
+  const picker = document.getElementById("skill-picker");
+  const providerPicker = document.getElementById("skill-provider-picker");
+  if (!picker || !ui.selectedRunId) return;
+  const skillName = picker.value;
+  const provider = providerPicker?.value || undefined;
+  setSkillsCache({ analyzing: true });
+  renderRuns();
+  try {
+    const result = await api.runSkill(skillName, { runIds: [ui.selectedRunId], provider });
+    setSkillsCache({ lastResult: result, lastRunId: ui.selectedRunId, lastSkill: skillName });
+  } catch (error) {
+    setSkillsCache({ lastResult: { ok: false, error: error.message }, lastRunId: ui.selectedRunId });
+  }
+  setSkillsCache({ analyzing: false });
+  renderRuns();
+}
+
+async function handleSkillAnalyzeBatch() {
+  const ui = getUi();
+  const state = getState();
+  const picker = document.getElementById("skill-batch-picker");
+  const providerPicker = document.getElementById("skill-batch-provider-picker");
+  if (!picker || !ui.selectedProjectId) return;
+  const skillName = picker.value;
+  const provider = providerPicker?.value || undefined;
+  const projectRuns = state.runs.filter((r) => r.project_id === ui.selectedProjectId);
+  if (!projectRuns.length) return;
+  setSkillsCache({ analyzing: true });
+  renderRuns();
+  try {
+    const result = await api.runSkill(skillName, { runIds: projectRuns.map((r) => r.id), provider });
+    setSkillsCache({ lastResult: result, lastRunId: "batch", lastSkill: skillName });
+  } catch (error) {
+    setSkillsCache({ lastResult: { ok: false, error: error.message }, lastRunId: "batch" });
+  }
+  setSkillsCache({ analyzing: false });
+  renderRuns();
+}
+
 export function onClick(event) {
   const ui = getUi();
+
+  const skillAction = event.target.closest("[data-skill-action]");
+  if (skillAction) {
+    const action = skillAction.dataset.skillAction;
+    if (action === "analyze") handleSkillAnalyze();
+    else if (action === "analyze-batch") handleSkillAnalyzeBatch();
+    return;
+  }
 
   const navTab = event.target.closest(".nav-tab");
   if (navTab) {

@@ -52,7 +52,7 @@ export async function serveFile(res, filePath) {
           : ext === ".png"
             ? "image/png"
             : "application/octet-stream";
-  res.writeHead(200, { "Content-Type": type });
+  res.writeHead(200, { "Content-Type": type, "Cache-Control": "no-store" });
   res.end(contents);
 }
 

@@ -51,7 +51,8 @@ function createApi() {
           backend: true,
           runner: payload.runner || "simulated",
           mcp: payload.mcp || "optional",
-          figma_mcp: payload.figma_mcp || false
+          figma_mcp: payload.figma_mcp || false,
+          skills: payload.skills || null
         };
       } catch (error) {
         return { mode: "browser", backend: false, runner: "simulated", mcp: "optional", figma_mcp: false };
@@ -314,6 +315,22 @@ function createApi() {
         sources: payload.sources || [],
         stats: payload.stats || {}
       };
+    },
+
+    async loadSkills() {
+      const runtime = getRuntime();
+      if (!runtime.backend || !runtime.skills?.providers_available?.length) return [];
+      try {
+        const data = await request("/api/skills");
+        return data.skills || [];
+      } catch { return []; }
+    },
+
+    async runSkill(skillName, { runIds, provider } = {}) {
+      return request(`/api/skills/${encodeURIComponent(skillName)}/run`, {
+        method: "POST",
+        body: JSON.stringify({ run_ids: runIds, provider })
+      });
     },
 
     async resetDemo() {

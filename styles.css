@@ -1638,3 +1638,42 @@ code {
     grid-template-columns: 1fr;
   }
 }
+
+/* Skill analysis panel */
+.skill-analysis-panel {
+  margin-top: 1rem;
+  border-top: 1px solid var(--border);
+  padding-top: 1rem;
+}
+
+.skill-controls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.skill-controls select {
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  color: var(--text-1);
+  font-size: 0.8rem;
+  min-width: 140px;
+}
+
+.skill-result {
+  margin-top: 0.5rem;
+}
+
+.skill-result-error {
+  color: var(--danger, #e53e3e);
+}
+
+.skill-recommendation {
+  font-style: italic;
+  opacity: 0.85;
+  margin-top: 0.25rem;
+}

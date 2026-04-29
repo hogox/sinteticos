@@ -1,0 +1,33 @@
+{
+  "type": "object",
+  "required": ["summary", "coverage_overview", "issues"],
+  "properties": {
+    "summary": { "type": "string" },
+    "coverage_overview": {
+      "type": "object",
+      "required": ["diagnosis"],
+      "properties": {
+        "ratio": { "type": "number" },
+        "diagnosis": { "type": "string" }
+      }
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["category", "severity", "label", "detail"],
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": ["dead_end", "low_coverage", "fallback_chain", "retry_failure", "unconnected_element", "circular_path"]
+          },
+          "severity": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+          "label": { "type": "string" },
+          "detail": { "type": "string" },
+          "evidence_screens": { "type": "array", "items": { "type": "string" } },
+          "recommendation": { "type": "string" }
+        }
+      }
+    }
+  }
+}

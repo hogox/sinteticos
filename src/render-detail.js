@@ -1,5 +1,6 @@
 import { drawVisualChrome, drawBackground, drawHeatPoints, drawScanPoints, loadScreenshot } from "./canvas.js";
 import { escapeHtml, severityToClass } from "./utils.js";
+import { getRuntime, getSkillsCache } from "./store.js";
 
 export function observedDetailHtml(run) {
   return `
@@ -129,6 +130,143 @@ export function predictiveDetailHtml(run, task) {
       </div>
     </div>
   `;
+}
+
+export function skillAnalysisHtml(run) {
+  const runtime = getRuntime();
+  const skillsCache = getSkillsCache();
+  if (!skillsCache.loaded || !skillsCache.list.length) return "";
+  const providers = runtime.skills?.providers_available || [];
+  if (!providers.length) return "";
+
+  const options = skillsCache.list
+    .filter((s) => !s.batch)
+    .map((s) => `<option value="${escapeHtml(s.name)}">${escapeHtml(s.name)}</option>`)
+    .join("");
+  const providerOptions = providers
+    .map((p) => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`)
+    .join("");
+  const isAnalyzing = skillsCache.analyzing;
+  const hasResult = skillsCache.lastResult && skillsCache.lastRunId === run.id;
+
+  return `
+    <div class="detail-card skill-analysis-panel">
+      <p class="eyebrow">Analisis con skills</p>
+      <div class="skill-controls">
+        <select id="skill-picker">${options}</select>
+        <select id="skill-provider-picker">${providerOptions}</select>
+        <button class="ghost-button" data-skill-action="analyze" ${isAnalyzing ? "disabled" : ""}>
+          ${isAnalyzing ? "Analizando..." : "Analizar"}
+        </button>
+      </div>
+      ${hasResult ? renderSkillResult(skillsCache.lastResult) : ""}
+    </div>
+  `;
+}
+
+export function skillBatchHtml(runs) {
+  const runtime = getRuntime();
+  const skillsCache = getSkillsCache();
+  if (!skillsCache.loaded || !skillsCache.list.length) return "";
+  const providers = runtime.skills?.providers_available || [];
+  if (!providers.length) return "";
+  const batchSkills = skillsCache.list.filter((s) => s.batch);
+  if (!batchSkills.length) return "";
+
+  const options = batchSkills
+    .map((s) => `<option value="${escapeHtml(s.name)}">${escapeHtml(s.name)}</option>`)
+    .join("");
+  const providerOptions = providers
+    .map((p) => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`)
+    .join("");
+  const hasResult = skillsCache.lastResult && skillsCache.lastRunId === "batch";
+
+  return `
+    <div class="detail-card skill-analysis-panel">
+      <p class="eyebrow">Analisis batch (${runs.length} runs)</p>
+      <div class="skill-controls">
+        <select id="skill-batch-picker">${options}</select>
+        <select id="skill-batch-provider-picker">${providerOptions}</select>
+        <button class="ghost-button" data-skill-action="analyze-batch" ${skillsCache.analyzing ? "disabled" : ""}>
+          ${skillsCache.analyzing ? "Analizando..." : "Analizar todos"}
+        </button>
+      </div>
+      ${hasResult ? renderSkillResult(skillsCache.lastResult) : ""}
+    </div>
+  `;
+}
+
+function renderSkillResult(result) {
+  if (!result) return "";
+  if (!result.ok) {
+    return `
+      <div class="skill-result skill-result-error">
+        <p><strong>Error:</strong> ${escapeHtml(result.error || "Error desconocido")}</p>
+        ${result.details ? `<p class="meta-row">${result.details.map((d) => `<span class="pill">${escapeHtml(d)}</span>`).join("")}</p>` : ""}
+      </div>
+    `;
+  }
+
+  const meta = `<div class="meta-row">
+    <span class="pill">${escapeHtml(result.provider)}</span>
+    <span class="pill">${escapeHtml(result.model)}</span>
+    <span class="pill">${result.latency_ms}ms</span>
+  </div>`;
+
+  const output = result.output;
+  let body = "";
+
+  if (output.findings) {
+    body = output.findings
+      .map((f) => `
+        <div class="timeline-entry">
+          <strong>${escapeHtml(f.label)}</strong>
+          <span class="status-pill ${severityToClass(f.severity)}">${f.severity}</span>
+          <p>${escapeHtml(f.detail)}</p>
+          ${f.recommendation ? `<p class="skill-recommendation">${escapeHtml(f.recommendation)}</p>` : ""}
+          ${f.evidence_steps ? `<p class="meta-row">${f.evidence_steps.map((s) => `<span class="pill">paso ${s}</span>`).join("")}</p>` : ""}
+        </div>
+      `)
+      .join("");
+  } else if (output.issues) {
+    body = output.issues
+      .map((i) => `
+        <div class="timeline-entry">
+          <strong>${escapeHtml(i.label)}</strong>
+          <span class="status-pill ${severityToClass(i.severity)}">${i.severity}</span>
+          <p>${escapeHtml(i.detail)}</p>
+          ${i.recommendation ? `<p class="skill-recommendation">${escapeHtml(i.recommendation)}</p>` : ""}
+        </div>
+      `)
+      .join("");
+  } else if (output.deviations !== undefined) {
+    const score = typeof output.score === "number" ? `Score: ${(output.score * 100).toFixed(0)}%` : "";
+    body = `<p>${escapeHtml(output.explanation || "")} ${score}</p>` +
+      (output.deviations || [])
+        .map((d) => `
+          <div class="timeline-entry">
+            <strong>${escapeHtml(d.label)}</strong>
+            <span class="status-pill ${severityToClass(d.severity)}">${d.severity}</span>
+            <p>${escapeHtml(d.detail)}</p>
+            ${d.expected_behavior ? `<p class="skill-recommendation">${escapeHtml(d.expected_behavior)}</p>` : ""}
+          </div>
+        `)
+        .join("");
+  } else if (output.recommendations) {
+    body = output.recommendations
+      .map((r) => `
+        <div class="timeline-entry">
+          <strong>${r.priority}. ${escapeHtml(r.label)}</strong>
+          <span class="status-pill ${severityToClass(r.expected_impact === "high" ? "high" : r.expected_impact === "low" ? "low" : "medium")}">${r.type}</span>
+          <p>${escapeHtml(r.detail)}</p>
+        </div>
+      `)
+      .join("");
+  } else if (output.summary) {
+    body = `<p>${escapeHtml(output.summary)}</p>`;
+  }
+
+  return `<div class="skill-result">${meta}<div class="timeline">${body}</div></div>`;
 }
 
 export async function drawRunObserved(run) {
