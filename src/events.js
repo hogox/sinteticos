@@ -25,7 +25,8 @@ import {
   onPersonaUploadSubmit,
   resetSimpleForm,
   resetUploadForm,
-  bindPersonaPreviewEvents
+  bindPersonaPreviewEvents,
+  bindPersonaUploadEvents
 } from "./persona-modes.js";
 
 export function bindEvents() {
@@ -44,6 +45,7 @@ export function bindEvents() {
   document.getElementById("persona-simple-reset").addEventListener("click", resetSimpleForm);
   document.getElementById("persona-upload-reset").addEventListener("click", resetUploadForm);
   bindPersonaPreviewEvents();
+  bindPersonaUploadEvents();
   document.getElementById("task-reset").addEventListener("click", resetTaskForm);
   document.getElementById("seed-demo").addEventListener("click", resetDemoData);
   document.getElementById("export-state").addEventListener("click", exportState);

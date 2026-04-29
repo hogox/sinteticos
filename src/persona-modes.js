@@ -39,23 +39,178 @@ export function resetSimpleForm() {
 
 export function resetUploadForm() {
   const form = document.getElementById("persona-upload-form");
-  if (form) form.reset();
+  if (!form) return;
+  form.reset();
+  const preview = document.getElementById("upload-file-preview");
+  if (preview) preview.innerHTML = "";
+  const validation = document.getElementById("upload-url-validation");
+  if (validation) validation.innerHTML = "";
+  const summary = document.getElementById("upload-summary");
+  if (summary) {
+    summary.innerHTML = "";
+    summary.classList.remove("is-warning");
+  }
+  setUploadTab("files");
 }
 
-async function readFilesAsText(fileList) {
-  const files = Array.from(fileList || []);
-  const parts = await Promise.all(
-    files.map(
-      (file) =>
-        new Promise((resolve) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(`--- archivo: ${file.name} ---\n${reader.result || ""}`);
-          reader.onerror = () => resolve(`--- archivo: ${file.name} (error de lectura) ---`);
-          reader.readAsText(file);
-        })
+const MAX_TOTAL_BYTES = 5 * 1024 * 1024;
+
+const UPLOAD_TAB_SECTIONS = ["files", "urls", "paste"];
+
+export function setUploadTab(tab) {
+  if (!UPLOAD_TAB_SECTIONS.includes(tab)) return;
+  document.querySelectorAll("[data-upload-tab]").forEach((btn) => {
+    const isActive = btn.dataset.uploadTab === tab;
+    btn.classList.toggle("is-active", isActive);
+    btn.setAttribute("aria-selected", isActive ? "true" : "false");
+  });
+  document.querySelectorAll("[data-upload-section]").forEach((section) => {
+    section.classList.toggle("hidden", section.dataset.uploadSection !== tab);
+  });
+}
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+function detectKindByName(filename) {
+  const lower = String(filename || "").toLowerCase();
+  if (lower.endsWith(".pdf")) return "PDF";
+  if (lower.endsWith(".xlsx") || lower.endsWith(".xlsm")) return "Excel";
+  if (lower.endsWith(".csv")) return "CSV";
+  if (lower.endsWith(".md")) return "Markdown";
+  if (lower.endsWith(".txt")) return "Texto";
+  return "Archivo";
+}
+
+export function renderFilePreview() {
+  const input = document.querySelector('#persona-upload-form input[name="files"]');
+  const preview = document.getElementById("upload-file-preview");
+  if (!input || !preview) return;
+  const files = Array.from(input.files || []);
+  if (!files.length) {
+    preview.innerHTML = "";
+    updateUploadSummary();
+    return;
+  }
+  preview.innerHTML = files
+    .map(
+      (file, idx) => `
+      <div class="upload-file-item" data-file-index="${idx}">
+        <div class="upload-file-item__main">
+          <span class="upload-file-item__kind">${detectKindByName(file.name)}</span>
+          <strong class="upload-file-item__name">${escapeHtml(file.name)}</strong>
+        </div>
+        <span class="upload-file-item__size">${formatBytes(file.size)}</span>
+      </div>
+    `
     )
+    .join("");
+  updateUploadSummary();
+}
+
+export function updateUploadSummary() {
+  const summary = document.getElementById("upload-summary");
+  if (!summary) return;
+  const form = document.getElementById("persona-upload-form");
+  if (!form) return;
+
+  const fileInput = form.elements.namedItem("files");
+  const files = fileInput && fileInput.files ? Array.from(fileInput.files) : [];
+  const totalFileBytes = files.reduce((sum, f) => sum + f.size, 0);
+
+  const urlsField = form.elements.namedItem("urls");
+  const urls = urlsField
+    ? String(urlsField.value || "")
+        .split(/\r?\n/)
+        .map((u) => u.trim())
+        .filter(Boolean)
+    : [];
+
+  const pastedField = form.elements.namedItem("pasted_text");
+  const pastedBytes = pastedField ? new Blob([String(pastedField.value || "")]).size : 0;
+
+  const totalBytes = totalFileBytes + pastedBytes; // URLs no cuentan al límite local (se traen en server)
+  const exceeded = totalBytes > MAX_TOTAL_BYTES;
+
+  const parts = [];
+  if (files.length) parts.push(`${files.length} archivo(s)`);
+  if (urls.length) parts.push(`${urls.length} URL(s)`);
+  if (pastedBytes) parts.push(`${formatBytes(pastedBytes)} pegado`);
+  const sizeLine = `Tamaño local: <strong>${formatBytes(totalBytes)}</strong> / ${formatBytes(MAX_TOTAL_BYTES)}`;
+
+  if (!parts.length) {
+    summary.innerHTML = "";
+    summary.classList.remove("is-warning");
+    return;
+  }
+  summary.classList.toggle("is-warning", exceeded);
+  summary.innerHTML = `
+    <div class="upload-summary__row">${parts.join(" · ")}</div>
+    <div class="upload-summary__row">${sizeLine}${exceeded ? " — excede el límite" : ""}</div>
+  `;
+}
+
+export async function validateUrls() {
+  const form = document.getElementById("persona-upload-form");
+  const out = document.getElementById("upload-url-validation");
+  if (!form || !out) return;
+  const urlsField = form.elements.namedItem("urls");
+  const urls = urlsField
+    ? String(urlsField.value || "")
+        .split(/\r?\n/)
+        .map((u) => u.trim())
+        .filter(Boolean)
+    : [];
+  if (!urls.length) {
+    out.innerHTML = `<p class="upload-urls-hint">Pega URLs en la textarea para validar.</p>`;
+    return;
+  }
+  out.innerHTML = urls
+    .map(
+      (u) =>
+        `<div class="upload-url-item is-pending" data-url="${escapeHtml(u)}"><span class="upload-url-item__status">⏳</span><code>${escapeHtml(u)}</code></div>`
+    )
+    .join("");
+
+  // Validación quick: HEAD desde el server vía endpoint dedicado, o fetch no-cors básico desde browser.
+  // Como no hay endpoint de validación, hacemos un best-effort fetch desde browser (funciona si CORS permite).
+  await Promise.all(
+    urls.map(async (u) => {
+      const node = out.querySelector(`[data-url="${cssEscape(u)}"]`);
+      if (!node) return;
+      try {
+        new URL(u); // valida formato primero
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 5000);
+        try {
+          const resp = await fetch(u, { method: "HEAD", mode: "no-cors", signal: controller.signal });
+          clearTimeout(timer);
+          // En no-cors, resp.status suele ser 0 pero no lanza; si llegamos acá, es alcanzable.
+          node.classList.remove("is-pending");
+          node.classList.add("is-success");
+          node.querySelector(".upload-url-item__status").textContent = "✓";
+        } catch (_) {
+          clearTimeout(timer);
+          node.classList.remove("is-pending");
+          node.classList.add("is-warning");
+          node.querySelector(".upload-url-item__status").textContent = "?";
+          // marcamos como warning porque el server podría poder tracker aunque el browser no.
+        }
+      } catch (error) {
+        node.classList.remove("is-pending");
+        node.classList.add("is-error");
+        node.querySelector(".upload-url-item__status").textContent = "✗";
+      }
+    })
   );
-  return parts.join("\n\n");
+}
+
+function cssEscape(str) {
+  if (window.CSS && window.CSS.escape) return window.CSS.escape(str);
+  return String(str).replace(/(["\\])/g, "\\$1");
 }
 
 function setBusy(formId, busy, busyLabel) {
@@ -141,31 +296,67 @@ export async function onPersonaUploadSubmit(event) {
   const pasted = String(formData.get("pasted_text") || "").trim();
   const quantity = Math.max(1, Math.min(20, Number(formData.get("quantity")) || 1));
   const fileInput = form.elements.namedItem("files");
-  const filesText = fileInput && fileInput.files ? await readFilesAsText(fileInput.files) : "";
-  const sourceText = [filesText, pasted].filter(Boolean).join("\n\n").trim();
-  if (!sourceText) {
-    alertError({ title: "Sin datos fuente", body: "Sube archivos o pega texto antes de extraer personas." });
+  const files = fileInput && fileInput.files ? Array.from(fileInput.files) : [];
+  const urlsField = form.elements.namedItem("urls");
+  const urls = urlsField
+    ? String(urlsField.value || "")
+        .split(/\r?\n/)
+        .map((u) => u.trim())
+        .filter(Boolean)
+    : [];
+
+  if (!files.length && !urls.length && !pasted) {
+    alertError({
+      title: "Sin datos fuente",
+      body: "Agrega archivos (PDF, Excel, texto), pega URLs o texto antes de extraer personas."
+    });
     return;
   }
-  setBusy("persona-upload-form", true, "Extrayendo…");
+
+  // Validación local de tamaño antes de enviar (los URLs no cuentan, los trae el server)
+  const totalLocalBytes = files.reduce((s, f) => s + f.size, 0) + new Blob([pasted]).size;
+  if (totalLocalBytes > MAX_TOTAL_BYTES) {
+    alertError({
+      title: "Demasiados datos",
+      body: `El total combinado (${formatBytes(totalLocalBytes)}) excede el límite de ${formatBytes(MAX_TOTAL_BYTES)}. Quita algún archivo o reduce el texto pegado.`
+    });
+    return;
+  }
+
+  setBusy("persona-upload-form", true, "Procesando fuentes…");
   try {
-    const personas = await api.aiExtractPersonas(sourceText, quantity);
-    if (!personas.length) {
-      alertError({ title: "Sin resultados", body: "El modelo no encontró personas distinguibles en los datos." });
+    const result = await api.aiExtractPersonasMulti({ files, urls, text: pasted, quantity });
+    const failedSources = (result.sources || []).filter((s) => !s.ok);
+    if (failedSources.length) {
+      // No fallamos el flujo: solo mostramos warning con las fallas en la consola
+      console.warn("[persona-upload] Fuentes con error:", failedSources);
+    }
+    if (!result.personas.length) {
+      alertError({
+        title: "Sin resultados",
+        body: failedSources.length
+          ? `El modelo no encontró personas. ${failedSources.length} fuente(s) fallaron al procesarse: ${failedSources.map((f) => `${f.source} (${f.error})`).join("; ")}`
+          : "El modelo no encontró personas distinguibles en los datos."
+      });
       return;
     }
-    openPersonaPreview(personas, "upload");
+    openPersonaPreview(result.personas, "upload", { sources: result.sources, stats: result.stats });
   } catch (error) {
+    if (error.sources) {
+      console.warn("[persona-upload] Sources from failed request:", error.sources);
+    }
     handleAiError(error);
   } finally {
     setBusy("persona-upload-form", false);
   }
 }
 
-function openPersonaPreview(personas, sourceMode) {
+function openPersonaPreview(personas, sourceMode, extras = {}) {
   const ui = getUi();
   ui.personaPreview = {
     sourceMode,
+    sources: Array.isArray(extras.sources) ? extras.sources : [],
+    stats: extras.stats || null,
     items: personas.map((p, i) => ({ id: `proposal-${i}`, persona: p, accepted: true }))
   };
   renderPersonaPreview();
@@ -186,6 +377,39 @@ function renderPersonaPreview() {
   const ui = getUi();
   const list = document.getElementById("persona-preview-list");
   if (!list || !ui.personaPreview) return;
+
+  // Render sources summary if available (multi-source upload)
+  const summaryHost = document.getElementById("persona-preview-body");
+  if (summaryHost && ui.personaPreview.sources && ui.personaPreview.sources.length) {
+    const stats = ui.personaPreview.stats || {};
+    const ok = ui.personaPreview.sources.filter((s) => s.ok);
+    const failed = ui.personaPreview.sources.filter((s) => !s.ok);
+    summaryHost.innerHTML = `
+      <strong>${ui.personaPreview.items.length}</strong> persona(s) extraída(s) de
+      <strong>${ok.length}</strong> fuente(s)${failed.length ? ` · <span class="upload-source-failed">${failed.length} con error</span>` : ""}.
+      ${stats.chars ? `<span class="upload-source-chars">${(stats.chars / 1024).toFixed(1)} KB de texto procesado.</span>` : ""}
+      <details class="upload-source-detail">
+        <summary>Ver fuentes</summary>
+        <ul class="upload-source-list">
+          ${ui.personaPreview.sources
+            .map((s) => {
+              const icon = s.ok ? "✓" : "✗";
+              const cls = s.ok ? "is-ok" : "is-error";
+              const meta = s.meta
+                ? Object.entries(s.meta)
+                    .map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : v}`)
+                    .join(", ")
+                : "";
+              return `<li class="${cls}"><span>${icon}</span> <code>${escapeHtml(s.kind)}</code> · ${escapeHtml(s.source)}${meta ? ` <em>(${escapeHtml(meta)})</em>` : ""}${s.error ? ` — <span class="upload-source-error">${escapeHtml(s.error)}</span>` : ""}</li>`;
+            })
+            .join("")}
+        </ul>
+      </details>
+    `;
+  } else if (summaryHost) {
+    summaryHost.textContent = "Revisa cada persona, descarta las que no quieras y confirma para guardarlas.";
+  }
+
   const items = ui.personaPreview.items;
   list.innerHTML = items
     .map((item) => {
@@ -218,6 +442,40 @@ function renderPersonaPreview() {
       `;
     })
     .join("");
+}
+
+export function bindPersonaUploadEvents() {
+  const form = document.getElementById("persona-upload-form");
+  if (!form) return;
+
+  // Tabs (Archivos / URLs / Pegado)
+  form.addEventListener("click", (event) => {
+    const tabBtn = event.target.closest("[data-upload-tab]");
+    if (tabBtn) {
+      event.preventDefault();
+      setUploadTab(tabBtn.dataset.uploadTab);
+      return;
+    }
+    if (event.target.id === "validate-urls-btn") {
+      event.preventDefault();
+      validateUrls();
+    }
+  });
+
+  // File input → preview + summary
+  const fileInput = form.elements.namedItem("files");
+  if (fileInput) {
+    fileInput.addEventListener("change", () => {
+      renderFilePreview();
+    });
+  }
+
+  // Cualquier input recalcula el summary
+  form.addEventListener("input", (event) => {
+    if (event.target && (event.target.name === "urls" || event.target.name === "pasted_text")) {
+      updateUploadSummary();
+    }
+  });
 }
 
 export function bindPersonaPreviewEvents() {

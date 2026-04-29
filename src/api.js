@@ -279,6 +279,43 @@ function createApi() {
       return payload.personas || [];
     },
 
+    /**
+     * Multi-source extraction: acepta archivos binarios (PDF, Excel, txt), URLs y texto pegado.
+     * @param {{ files?: File[], urls?: string[], text?: string, quantity?: number }} input
+     * @returns {Promise<{ personas: object[], sources: object[], stats: object }>}
+     */
+    async aiExtractPersonasMulti({ files = [], urls = [], text = "", quantity = 3 } = {}) {
+      const runtime = getRuntime();
+      if (!runtime.backend) {
+        const error = new Error("Los modos asistidos requieren correr el server local (npm start). En modo browser-only no están disponibles.");
+        error.code = "NO_BACKEND";
+        throw error;
+      }
+      const formData = new FormData();
+      formData.append("quantity", String(quantity));
+      if (text) formData.append("text", text);
+      urls.filter(Boolean).forEach((u) => formData.append("urls", u));
+      Array.from(files || []).forEach((file) => formData.append("files", file, file.name));
+
+      const response = await fetch("/api/personas/ai-extract-multi", {
+        method: "POST",
+        body: formData
+        // NO seteamos Content-Type: el browser lo agrega con el boundary correcto.
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const error = new Error(payload.error || `Request failed: ${response.status}`);
+        error.code = payload.code || "REQUEST_FAILED";
+        error.sources = payload.sources;
+        throw error;
+      }
+      return {
+        personas: payload.personas || [],
+        sources: payload.sources || [],
+        stats: payload.stats || {}
+      };
+    },
+
     async resetDemo() {
       const runtime = getRuntime();
       if (runtime.backend) {
