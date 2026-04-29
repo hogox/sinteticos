@@ -1,0 +1,21 @@
+{
+  "type": "object",
+  "required": ["summary", "findings"],
+  "properties": {
+    "summary": { "type": "string" },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["label", "severity", "detail"],
+        "properties": {
+          "label": { "type": "string" },
+          "severity": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+          "detail": { "type": "string" },
+          "evidence_steps": { "type": "array", "items": { "type": "number" } },
+          "recommendation": { "type": "string" }
+        }
+      }
+    }
+  }
+}

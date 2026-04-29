@@ -26,7 +26,8 @@
 
   const api = createApi();
   let state = emptyState();
-  let runtime = { mode: "loading", runner: "unknown", backend: false, mcp: "optional" };
+  let runtime = { mode: "loading", runner: "unknown", backend: false, mcp: "optional", skills: null };
+  let skillsCache = { list: [], loaded: false, analyzing: false, lastResult: null, lastRunId: null, lastSkill: null };
   let ui = {
     section: "projects",
     selectedProjectId: null,
@@ -50,6 +51,16 @@
   async function bootstrap() {
     runtime = await api.health();
     state = await api.loadState();
+    if (runtime.backend && runtime.skills && runtime.skills.providers_available.length) {
+      try {
+        const data = await request("/api/skills");
+        skillsCache.list = data.skills || [];
+        skillsCache.loaded = true;
+        console.log("[skills] loaded", skillsCache.list.length, "skills");
+      } catch (err) { console.warn("[skills] load failed", err); }
+    } else {
+      console.log("[skills] skipped", { backend: runtime.backend, skills: runtime.skills });
+    }
     ensureSelection();
     createRuntimeBadge();
     bindEvents();
@@ -161,6 +172,20 @@
     if (taskCard) {
       ui.selectedTaskId = taskCard.dataset.taskId;
       render();
+      return;
+    }
+
+    const skillAction = event.target.closest("[data-skill-action]");
+    if (skillAction) {
+      const action = skillAction.dataset.skillAction;
+      if (action === "analyze") {
+        handleSkillAnalyze();
+      } else if (action === "analyze-batch") {
+        handleSkillAnalyzeBatch();
+      } else if (action === "toggle-raw") {
+        const raw = document.getElementById("skill-raw-output");
+        if (raw) raw.classList.toggle("hidden");
+      }
       return;
     }
 
@@ -726,19 +751,21 @@
     const task = getTaskById(run.task_id);
     title.textContent = `${persona ? persona.name : "Persona"} · ${task ? task.type : "run"}`;
 
+    const skillPanel = skillAnalysisHtml(run);
+
     if (ui.runDetailView === "observed") {
-      detail.innerHTML = observedDetailHtml(run);
+      detail.innerHTML = observedDetailHtml(run) + skillPanel;
       drawRunObserved(run);
       return;
     }
 
     if (ui.runDetailView === "predictive") {
-      detail.innerHTML = predictiveDetailHtml(run, task);
+      detail.innerHTML = predictiveDetailHtml(run, task) + skillPanel;
       drawPredictiveCanvas(run);
       return;
     }
 
-    detail.innerHTML = inferredDetailHtml(run, persona, task);
+    detail.innerHTML = inferredDetailHtml(run, persona, task) + skillPanel;
   }
 
   function renderCalibration() {
@@ -1083,6 +1110,204 @@
     `;
   }
 
+  function skillAnalysisHtml(run) {
+    if (!skillsCache.loaded || !skillsCache.list.length) return "";
+    const providers = runtime.skills?.providers_available || [];
+    if (!providers.length) return "";
+
+    const options = skillsCache.list
+      .filter((s) => !s.batch)
+      .map((s) => `<option value="${escapeHtml(s.name)}">${escapeHtml(s.name)}</option>`)
+      .join("");
+    const batchOptions = skillsCache.list
+      .filter((s) => s.batch)
+      .map((s) => `<option value="${escapeHtml(s.name)}">${escapeHtml(s.name)}</option>`)
+      .join("");
+    const providerOptions = providers
+      .map((p) => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`)
+      .join("");
+    const isAnalyzing = skillsCache.analyzing;
+    const hasResult = skillsCache.lastResult && skillsCache.lastRunId === run.id;
+
+    return `
+      <div class="detail-card skill-analysis-panel">
+        <p class="eyebrow">Analisis con skills</p>
+        <div class="skill-controls">
+          <select id="skill-picker">${options}</select>
+          <select id="skill-provider-picker">${providerOptions}</select>
+          <button class="ghost-button" data-skill-action="analyze" ${isAnalyzing ? "disabled" : ""}>
+            ${isAnalyzing ? "Analizando..." : "Analizar"}
+          </button>
+        </div>
+        ${hasResult ? renderSkillResult(skillsCache.lastResult) : ""}
+      </div>
+    `;
+  }
+
+  function skillBatchHtml(runs) {
+    if (!skillsCache.loaded || !skillsCache.list.length) return "";
+    const providers = runtime.skills?.providers_available || [];
+    if (!providers.length) return "";
+    const batchSkills = skillsCache.list.filter((s) => s.batch);
+    if (!batchSkills.length) return "";
+
+    const options = batchSkills
+      .map((s) => `<option value="${escapeHtml(s.name)}">${escapeHtml(s.name)}</option>`)
+      .join("");
+    const providerOptions = providers
+      .map((p) => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`)
+      .join("");
+
+    return `
+      <div class="detail-card skill-analysis-panel">
+        <p class="eyebrow">Analisis batch (${runs.length} runs)</p>
+        <div class="skill-controls">
+          <select id="skill-batch-picker">${options}</select>
+          <select id="skill-batch-provider-picker">${providerOptions}</select>
+          <button class="ghost-button" data-skill-action="analyze-batch" ${skillsCache.analyzing ? "disabled" : ""}>
+            ${skillsCache.analyzing ? "Analizando..." : "Analizar todos"}
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderSkillResult(result) {
+    if (!result) return "";
+    if (!result.ok) {
+      return `
+        <div class="skill-result skill-result-error">
+          <p><strong>Error:</strong> ${escapeHtml(result.error || "Error desconocido")}</p>
+          ${result.details ? `<p class="meta-row">${result.details.map((d) => `<span class="pill">${escapeHtml(d)}</span>`).join("")}</p>` : ""}
+        </div>
+      `;
+    }
+
+    const meta = `<div class="meta-row">
+      <span class="pill">${escapeHtml(result.provider)}</span>
+      <span class="pill">${escapeHtml(result.model)}</span>
+      <span class="pill">${result.latency_ms}ms</span>
+    </div>`;
+
+    const output = result.output;
+    let body = "";
+
+    if (output.findings) {
+      body = output.findings
+        .map((f) => `
+          <div class="timeline-entry">
+            <strong>${escapeHtml(f.label)}</strong>
+            <span class="status-pill ${severityToClass(f.severity)}">${f.severity}</span>
+            <p>${escapeHtml(f.detail)}</p>
+            ${f.recommendation ? `<p class="skill-recommendation">${escapeHtml(f.recommendation)}</p>` : ""}
+            ${f.evidence_steps ? `<p class="meta-row">${f.evidence_steps.map((s) => `<span class="pill">paso ${s}</span>`).join("")}</p>` : ""}
+          </div>
+        `)
+        .join("");
+    } else if (output.issues) {
+      body = output.issues
+        .map((i) => `
+          <div class="timeline-entry">
+            <strong>${escapeHtml(i.label)}</strong>
+            <span class="status-pill ${severityToClass(i.severity)}">${i.severity}</span>
+            <span class="pill">${escapeHtml(i.category)}</span>
+            <p>${escapeHtml(i.detail)}</p>
+            ${i.recommendation ? `<p class="skill-recommendation">${escapeHtml(i.recommendation)}</p>` : ""}
+          </div>
+        `)
+        .join("");
+    } else if (output.deviations) {
+      const coherenceClass = output.coherent ? "status-completed" : "status-abandoned";
+      body = `
+        <div class="timeline-entry">
+          <strong>Score: ${output.score}</strong>
+          <span class="status-pill ${coherenceClass}">${output.coherent ? "coherente" : "incoherente"}</span>
+          <p>${escapeHtml(output.explanation)}</p>
+        </div>
+        ${output.deviations.map((d) => `
+          <div class="timeline-entry">
+            <strong>${escapeHtml(d.label)}</strong>
+            <span class="status-pill ${severityToClass(d.severity)}">${d.severity}</span>
+            <p>${escapeHtml(d.detail)}</p>
+            ${d.expected_behavior ? `<p class="skill-recommendation">${escapeHtml(d.expected_behavior)}</p>` : ""}
+            ${d.evidence_step ? `<span class="pill">paso ${d.evidence_step}</span>` : ""}
+          </div>
+        `).join("")}
+      `;
+    } else if (output.recommendations) {
+      body = output.recommendations
+        .map((r) => `
+          <div class="timeline-entry">
+            <strong>#${r.priority} ${escapeHtml(r.label)}</strong>
+            <span class="pill">${escapeHtml(r.type)}</span>
+            <span class="status-pill ${severityToClass(r.expected_impact === "high" ? "high" : r.expected_impact === "medium" ? "medium" : "low")}">${r.expected_impact || "medium"}</span>
+            <p>${escapeHtml(r.detail)}</p>
+          </div>
+        `)
+        .join("");
+    }
+
+    return `
+      <div class="skill-result">
+        ${output.summary ? `<p><strong>${escapeHtml(output.summary)}</strong></p>` : ""}
+        ${meta}
+        <div class="timeline">${body}</div>
+        <button class="ghost-button" data-skill-action="toggle-raw" style="margin-top:8px">Ver JSON crudo</button>
+        <pre id="skill-raw-output" class="hidden" style="max-height:300px;overflow:auto;font-size:11px;background:var(--surface-1);padding:8px;border-radius:6px">${escapeHtml(JSON.stringify(output, null, 2))}</pre>
+      </div>
+    `;
+  }
+
+  async function handleSkillAnalyze() {
+    const picker = document.getElementById("skill-picker");
+    const providerPicker = document.getElementById("skill-provider-picker");
+    if (!picker || !ui.selectedRunId) return;
+    const skillName = picker.value;
+    const provider = providerPicker?.value || undefined;
+    skillsCache.analyzing = true;
+    renderRuns();
+    try {
+      const result = await request(`/api/skills/${encodeURIComponent(skillName)}/run`, {
+        method: "POST",
+        body: JSON.stringify({ run_ids: [ui.selectedRunId], provider })
+      });
+      skillsCache.lastResult = result;
+      skillsCache.lastRunId = ui.selectedRunId;
+      skillsCache.lastSkill = skillName;
+    } catch (error) {
+      skillsCache.lastResult = { ok: false, error: error.message };
+      skillsCache.lastRunId = ui.selectedRunId;
+    }
+    skillsCache.analyzing = false;
+    renderRuns();
+  }
+
+  async function handleSkillAnalyzeBatch() {
+    const picker = document.getElementById("skill-batch-picker");
+    const providerPicker = document.getElementById("skill-batch-provider-picker");
+    if (!picker || !ui.selectedProjectId) return;
+    const skillName = picker.value;
+    const provider = providerPicker?.value || undefined;
+    const projectRuns = state.runs.filter((r) => r.project_id === ui.selectedProjectId);
+    if (!projectRuns.length) return;
+    skillsCache.analyzing = true;
+    renderRuns();
+    try {
+      const result = await request(`/api/skills/${encodeURIComponent(skillName)}/run`, {
+        method: "POST",
+        body: JSON.stringify({ run_ids: projectRuns.map((r) => r.id), provider })
+      });
+      skillsCache.lastResult = result;
+      skillsCache.lastRunId = "batch";
+      skillsCache.lastSkill = skillName;
+    } catch (error) {
+      skillsCache.lastResult = { ok: false, error: error.message };
+      skillsCache.lastRunId = "batch";
+    }
+    skillsCache.analyzing = false;
+    renderRuns();
+  }
+
   function fillProjectForm(project) {
     const form = document.getElementById("project-form");
     Object.keys(project).forEach((key) => {
@@ -1296,7 +1521,8 @@
             backend: true,
             runner: payload.runner || "simulated",
             mcp: payload.mcp || "optional",
-            figma_mcp: payload.figma_mcp || false
+            figma_mcp: payload.figma_mcp || false,
+            skills: payload.skills || null
           };
         } catch (error) {
           return { mode: "browser", backend: false, runner: "simulated", mcp: "optional", figma_mcp: false };

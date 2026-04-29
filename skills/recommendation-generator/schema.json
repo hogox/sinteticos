@@ -1,0 +1,24 @@
+{
+  "type": "object",
+  "required": ["summary", "runs_analyzed", "recommendations"],
+  "properties": {
+    "summary": { "type": "string" },
+    "runs_analyzed": { "type": "number" },
+    "caveats": { "type": "array", "items": { "type": "string" } },
+    "recommendations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["priority", "type", "label", "detail"],
+        "properties": {
+          "priority": { "type": "number" },
+          "type": { "type": "string", "enum": ["prototype", "ux_copy", "research"] },
+          "label": { "type": "string" },
+          "detail": { "type": "string" },
+          "evidence_run_ids": { "type": "array", "items": { "type": "string" } },
+          "expected_impact": { "type": "string", "enum": ["high", "medium", "low"] }
+        }
+      }
+    }
+  }
+}

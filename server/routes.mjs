@@ -4,6 +4,8 @@ import { checkFigmaAvailability } from "../figma-mcp-client.mjs";
 import { generatePersonas, extractPersonas, generatePersonaChatReply } from "./anthropic.mjs";
 import { parseMultipart, MAX_TOTAL_BYTES } from "./multipart.mjs";
 import { parseFile, fetchAndParseUrl } from "./parsers.mjs";
+import { loadSkillRegistry, listSkills, getSkill } from "../skills/_runtime/loader.mjs";
+import { runSkill, getRuntimeStatus } from "../skills/_runtime/executor.mjs";
 
 export function createRouteHandler(deps) {
   const { readState, writeState, readJson, serveFile, sendJson, uid, safeExecuteRun, getPlaywright, buildInitialState } = deps;
@@ -16,11 +18,13 @@ export function createRouteHandler(deps) {
         const playwright = await getPlaywright();
         const figmaToken = process.env.FIGMA_ACCESS_TOKEN || "";
         const figmaAvailable = figmaToken ? await checkFigmaAvailability(figmaToken) : false;
+        const skillsStatus = await getRuntimeStatus();
         return sendJson(res, 200, {
           ok: true,
           runner: playwright ? "playwright-ready" : "simulated-fallback",
           mcp: figmaAvailable ? "figma-mcp-ready" : "optional",
-          figma_mcp: figmaAvailable
+          figma_mcp: figmaAvailable,
+          skills: skillsStatus
         });
       }
 
@@ -434,6 +438,54 @@ export function createRouteHandler(deps) {
         state.runs = state.runs.filter((item) => item.id !== runMatch[1]);
         await writeState(state);
         return sendJson(res, 200, { state });
+      }
+
+      if (url.pathname === "/api/skills" && req.method === "GET") {
+        const registry = await loadSkillRegistry();
+        return sendJson(res, 200, { skills: listSkills(registry) });
+      }
+
+      const skillRunMatch = url.pathname.match(/^\/api\/skills\/([^/]+)\/run$/);
+      if (skillRunMatch && req.method === "POST") {
+        const skillName = skillRunMatch[1];
+        const registry = await loadSkillRegistry();
+        const skill = getSkill(registry, skillName);
+        if (!skill) {
+          return sendJson(res, 404, { error: `Skill no encontrado: ${skillName}` });
+        }
+        const payload = await readJson(req);
+        const state = await readState();
+        const runIds = Array.isArray(payload.run_ids) ? payload.run_ids : [];
+        const runs = runIds.map((rid) => state.runs.find((r) => r.id === rid)).filter(Boolean);
+        if (!runs.length) {
+          return sendJson(res, 400, { error: "No se encontraron runs con los IDs proporcionados." });
+        }
+        const personaId = payload.persona_id || runs[0].persona_id;
+        const taskId = payload.task_id || runs[0].task_id;
+        const persona = state.personas.find((p) => p.id === personaId) || null;
+        const task = state.tasks.find((t) => t.id === taskId) || null;
+        const project = state.projects.find((p) => p.id === (task?.project_id || runs[0].project_id)) || null;
+        try {
+          const result = await runSkill(skillName, { runs, persona, task, project }, { provider: payload.provider || undefined });
+          if (url.searchParams.get("persist") === "true" && result.ok) {
+            state.run_analyses = state.run_analyses || [];
+            state.run_analyses.unshift({
+              id: uid("analysis"),
+              run_ids: runIds,
+              skill: skillName,
+              output: result.output,
+              provider: result.provider,
+              model: result.model,
+              latency_ms: result.latency_ms,
+              created_at: new Date().toISOString()
+            });
+            await writeState(state);
+          }
+          return sendJson(res, 200, result);
+        } catch (error) {
+          const status = error.code === "PROVIDER_KEY_MISSING" || error.code === "NO_PROVIDER" ? 503 : 502;
+          return sendJson(res, status, { ok: false, error: error.message, code: error.code || "SKILL_ERROR" });
+        }
       }
 
       if (url.pathname.startsWith("/artifacts/")) {

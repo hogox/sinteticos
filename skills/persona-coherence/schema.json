@@ -1,0 +1,23 @@
+{
+  "type": "object",
+  "required": ["coherent", "score", "explanation", "deviations"],
+  "properties": {
+    "coherent": { "type": "boolean" },
+    "score": { "type": "number" },
+    "explanation": { "type": "string" },
+    "deviations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["severity", "label", "detail"],
+        "properties": {
+          "severity": { "type": "string", "enum": ["minor", "moderate", "severe"] },
+          "label": { "type": "string" },
+          "detail": { "type": "string" },
+          "evidence_step": { "type": "number" },
+          "expected_behavior": { "type": "string" }
+        }
+      }
+    }
+  }
+}

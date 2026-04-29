@@ -12,7 +12,7 @@ import {
   severityToClass
 } from "./utils.js";
 import { fillSelect, toggleFormDisabled, resetProjectForm, resetPersonaForm, resetTaskForm } from "./forms.js";
-import { observedDetailHtml, inferredDetailHtml, predictiveDetailHtml, drawRunObserved, drawPredictiveCanvas } from "./render-detail.js";
+import { observedDetailHtml, inferredDetailHtml, predictiveDetailHtml, drawRunObserved, drawPredictiveCanvas, skillAnalysisHtml, skillBatchHtml } from "./render-detail.js";
 
 export function renderProjects() {
   const state = getState();
@@ -190,6 +190,9 @@ export function renderRuns() {
     : emptyStateMarkup("Primero crea o selecciona un proyecto para ejecutar runs.");
   toggleFormDisabled("run-form", Boolean(projectId));
 
+  const batchPanel = document.getElementById("run-batch-panel");
+  if (batchPanel) batchPanel.innerHTML = skillBatchHtml(runs);
+
   document.querySelectorAll(".pill-button").forEach((button) =>
     button.classList.toggle("is-active", button.dataset.detailView === ui.runDetailView)
   );
@@ -208,19 +211,21 @@ export function renderRuns() {
   const task = getTaskById(run.task_id, state);
   title.textContent = `${persona ? persona.name : "Persona"} · ${task ? task.type : "run"}`;
 
+  const skillPanel = skillAnalysisHtml(run);
+
   if (ui.runDetailView === "observed") {
-    detail.innerHTML = observedDetailHtml(run);
+    detail.innerHTML = observedDetailHtml(run) + skillPanel;
     drawRunObserved(run);
     return;
   }
 
   if (ui.runDetailView === "predictive") {
-    detail.innerHTML = predictiveDetailHtml(run, task);
+    detail.innerHTML = predictiveDetailHtml(run, task) + skillPanel;
     drawPredictiveCanvas(run);
     return;
   }
 
-  detail.innerHTML = inferredDetailHtml(run, persona, task);
+  detail.innerHTML = inferredDetailHtml(run, persona, task) + skillPanel;
 }
 
 export function renderCalibration() {
