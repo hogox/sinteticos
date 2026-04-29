@@ -266,9 +266,39 @@
               </form>
 
               <form id="persona-upload-form" class="persona-mode-form upload-form" hidden>
-                <p class="mode-hint">Sube archivos de texto (.txt, .md, .csv) o pega transcripciones, entrevistas o datos. La IA extraerá personas respaldadas por la evidencia.</p>
-                <label>Archivos<input type="file" name="files" accept=".txt,.md,.csv,text/plain,text/markdown,text/csv" multiple /></label>
-                <label>Texto pegado<textarea name="pasted_text" rows="8" placeholder="Pega aquí transcripciones, notas, datos de usuarios..."></textarea></label>
+                <p class="mode-hint">Combina archivos (PDF, Excel, .txt, .md, .csv), URLs y texto pegado. La IA extraerá personas respaldadas por la evidencia. Límite: 5 MB combinados.</p>
+
+                <div class="pill-row upload-tabs" role="tablist" aria-label="Fuentes de datos">
+                  <button type="button" class="pill-button is-active" data-upload-tab="files" role="tab" aria-selected="true">Archivos</button>
+                  <button type="button" class="pill-button" data-upload-tab="urls" role="tab" aria-selected="false">URLs</button>
+                  <button type="button" class="pill-button" data-upload-tab="paste" role="tab" aria-selected="false">Pegado</button>
+                </div>
+
+                <div class="upload-section" data-upload-section="files">
+                  <label>Archivos
+                    <input type="file" name="files" accept=".txt,.md,.csv,.pdf,.xlsx,.xlsm,text/plain,text/markdown,text/csv,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple />
+                  </label>
+                  <div id="upload-file-preview" class="upload-file-preview"></div>
+                </div>
+
+                <div class="upload-section hidden" data-upload-section="urls">
+                  <label>URLs (una por línea)
+                    <textarea name="urls" rows="5" placeholder="https://example.com/articulo&#10;https://docs.google.com/..."></textarea>
+                  </label>
+                  <div class="upload-urls-actions">
+                    <button type="button" class="ghost-button" id="validate-urls-btn">Validar URLs</button>
+                    <span class="upload-urls-hint">Se hará fetch desde el server al extraer.</span>
+                  </div>
+                  <div id="upload-url-validation" class="upload-url-validation"></div>
+                </div>
+
+                <div class="upload-section hidden" data-upload-section="paste">
+                  <label>Texto pegado
+                    <textarea name="pasted_text" rows="8" placeholder="Pega aquí transcripciones, notas, datos de usuarios..."></textarea>
+                  </label>
+                </div>
+
+                <div class="upload-summary" id="upload-summary"></div>
                 <label class="quantity-field">Cantidad máxima a extraer<input type="number" name="quantity" min="1" max="20" value="3" required /></label>
                 <div class="form-actions">
                   <button type="submit" id="persona-upload-submit">Extraer personas</button>

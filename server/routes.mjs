@@ -2,6 +2,8 @@ import path from "node:path";
 import { PROJECT_ROOT } from "./config.mjs";
 import { checkFigmaAvailability } from "../figma-mcp-client.mjs";
 import { generatePersonas, extractPersonas, generatePersonaChatReply } from "./anthropic.mjs";
+import { parseMultipart, MAX_TOTAL_BYTES } from "./multipart.mjs";
+import { parseFile, fetchAndParseUrl } from "./parsers.mjs";
 
 export function createRouteHandler(deps) {
   const { readState, writeState, readJson, serveFile, sendJson, uid, safeExecuteRun, getPlaywright, buildInitialState } = deps;
@@ -66,6 +68,102 @@ export function createRouteHandler(deps) {
         } catch (error) {
           const status = error.code === "ANTHROPIC_KEY_MISSING" ? 503 : error.code === "INVALID_INPUT" ? 400 : 502;
           return sendJson(res, status, { error: error.message, code: error.code || "ANTHROPIC_ERROR" });
+        }
+      }
+
+      if (url.pathname === "/api/personas/ai-extract-multi" && req.method === "POST") {
+        try {
+          const { files, fields } = await parseMultipart(req);
+          const quantity = Number(fields.quantity) || 3;
+          const pastedText = String(fields.text || fields.pasted_text || "").trim();
+          const urlsRaw = fields.urls || [];
+          const urls = (Array.isArray(urlsRaw) ? urlsRaw : [urlsRaw])
+            .flatMap((entry) => String(entry || "").split(/\r?\n/))
+            .map((u) => u.trim())
+            .filter(Boolean);
+
+          if (!files.length && !urls.length && !pastedText) {
+            return sendJson(res, 400, { error: "No hay fuentes para procesar (archivos, URLs ni texto).", code: "NO_SOURCES" });
+          }
+
+          // Procesar archivos y URLs en paralelo, capturando errores por fuente sin abortar el batch.
+          const fileResults = await Promise.all(
+            files.map(async (file) => {
+              try {
+                const parsed = await parseFile(file);
+                return { ok: true, ...parsed };
+              } catch (error) {
+                return { ok: false, source: file.filename, kind: "file", error: error.message };
+              }
+            })
+          );
+
+          const urlResults = await Promise.all(
+            urls.map(async (link) => {
+              try {
+                const parsed = await fetchAndParseUrl(link);
+                return {
+                  ok: true,
+                  source: parsed.url,
+                  kind: "url",
+                  text: parsed.text,
+                  meta: { title: parsed.title, status: parsed.status }
+                };
+              } catch (error) {
+                return { ok: false, source: link, kind: "url", error: error.message };
+              }
+            })
+          );
+
+          const sources = [...fileResults, ...urlResults];
+          if (pastedText) {
+            sources.push({ ok: true, source: "texto pegado", kind: "text", text: pastedText, meta: { bytes: pastedText.length } });
+          }
+
+          const successful = sources.filter((s) => s.ok && s.text);
+          const failed = sources.filter((s) => !s.ok);
+
+          if (!successful.length) {
+            return sendJson(res, 400, {
+              error: "No se pudo procesar ninguna fuente.",
+              code: "ALL_SOURCES_FAILED",
+              sources
+            });
+          }
+
+          // Concatenar todo con headers reconocibles para el modelo.
+          const concatenated = successful
+            .map((src) => {
+              const label = src.kind === "url" ? `url: ${src.source}` : `archivo: ${src.source}`;
+              return `--- ${label} ---\n${src.text}`;
+            })
+            .join("\n\n");
+
+          // Limitar tamaño total enviado al modelo (~5MB texto)
+          const truncated = concatenated.length > MAX_TOTAL_BYTES
+            ? concatenated.slice(0, MAX_TOTAL_BYTES)
+            : concatenated;
+
+          const personas = await extractPersonas(truncated, quantity);
+          return sendJson(res, 200, {
+            personas,
+            sources: sources.map((s) => ({
+              ok: s.ok,
+              kind: s.kind,
+              source: s.source,
+              ...(s.meta ? { meta: s.meta } : {}),
+              ...(s.error ? { error: s.error } : {})
+            })),
+            stats: {
+              total_sources: sources.length,
+              successful: successful.length,
+              failed: failed.length,
+              chars: truncated.length
+            }
+          });
+        } catch (error) {
+          const status = error.status || (error.code === "ANTHROPIC_KEY_MISSING" ? 503 : error.code === "INVALID_INPUT" ? 400 : 502);
+          return sendJson(res, status, { error: error.message, code: error.code || "MULTI_EXTRACT_ERROR" });
         }
       }
 
