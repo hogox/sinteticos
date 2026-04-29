@@ -1296,6 +1296,219 @@ code {
   }
 }
 
+/* === Multi-source upload (PDF/Excel/URLs) === */
+.upload-tabs {
+  margin: 0.5rem 0 0.75rem;
+}
+
+.upload-section {
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.upload-section.hidden {
+  display: none;
+}
+
+.upload-file-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.upload-file-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  background: rgba(25, 25, 25, 0.04);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  font-size: 0.85rem;
+}
+
+.upload-file-item__main {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  min-width: 0;
+}
+
+.upload-file-item__kind {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(255, 111, 60, 0.14);
+  color: var(--accent-deep);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+
+.upload-file-item__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+}
+
+.upload-file-item__size {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  margin-left: 0.5rem;
+}
+
+.upload-urls-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.upload-urls-hint {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.upload-url-validation {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.upload-url-item {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.45rem 0.7rem;
+  border-radius: 10px;
+  background: rgba(25, 25, 25, 0.03);
+  font-size: 0.82rem;
+}
+
+.upload-url-item code {
+  background: transparent;
+  padding: 0;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.upload-url-item__status {
+  font-weight: 700;
+  flex-shrink: 0;
+  width: 1.2rem;
+  text-align: center;
+}
+
+.upload-url-item.is-pending .upload-url-item__status {
+  color: var(--teal);
+}
+.upload-url-item.is-success {
+  background: rgba(111, 143, 63, 0.1);
+}
+.upload-url-item.is-success .upload-url-item__status {
+  color: #6f8f3f;
+}
+.upload-url-item.is-warning {
+  background: rgba(217, 161, 0, 0.1);
+}
+.upload-url-item.is-warning .upload-url-item__status {
+  color: #b58400;
+}
+.upload-url-item.is-error {
+  background: rgba(209, 72, 31, 0.08);
+}
+.upload-url-item.is-error .upload-url-item__status {
+  color: var(--accent-deep);
+}
+
+.upload-summary {
+  margin: 0.5rem 0;
+  padding: 0.6rem 0.85rem;
+  background: rgba(15, 139, 141, 0.07);
+  border-radius: 12px;
+  font-size: 0.82rem;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.upload-summary:empty {
+  display: none;
+}
+
+.upload-summary.is-warning {
+  background: rgba(209, 72, 31, 0.12);
+  color: var(--accent-deep);
+}
+
+.upload-summary__row strong {
+  color: var(--ink);
+}
+
+/* Sources detail in preview modal */
+.upload-source-failed {
+  color: var(--accent-deep);
+  font-weight: 600;
+}
+
+.upload-source-chars {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-top: 0.2rem;
+}
+
+.upload-source-detail {
+  margin-top: 0.4rem;
+}
+
+.upload-source-detail summary {
+  cursor: pointer;
+  font-size: 0.82rem;
+  color: var(--teal);
+  user-select: none;
+}
+
+.upload-source-list {
+  list-style: none;
+  padding-left: 0;
+  margin: 0.5rem 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.82rem;
+}
+
+.upload-source-list li {
+  padding: 0.35rem 0.55rem;
+  border-radius: 8px;
+  background: rgba(25, 25, 25, 0.03);
+}
+
+.upload-source-list li.is-error {
+  background: rgba(209, 72, 31, 0.08);
+}
+
+.upload-source-list code {
+  font-size: 0.72rem;
+  padding: 0.05rem 0.4rem;
+}
+
+.upload-source-error {
+  color: var(--accent-deep);
+}
+
 @media (max-width: 1180px) {
   .hero-card {
     grid-template-columns: 1fr;
