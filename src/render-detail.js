@@ -67,6 +67,7 @@ export function observedDetailHtml(run) {
         </div>
       </div>
     </div>
+    ${lighthousePanelHtml(run)}
   `;
 }
 
@@ -140,7 +141,7 @@ export function skillAnalysisHtml(run) {
   if (!providers.length) return "";
 
   const options = skillsCache.list
-    .filter((s) => !s.batch)
+    .filter((s) => !s.batch && s.name !== "lighthouse-analyst")
     .map((s) => `<option value="${escapeHtml(s.name)}">${escapeHtml(s.name)}</option>`)
     .join("");
   const providerOptions = providers
@@ -267,6 +268,128 @@ function renderSkillResult(result) {
   }
 
   return `<div class="skill-result">${meta}<div class="timeline">${body}</div></div>`;
+}
+
+function lhScoreClass(score) {
+  if (score === null || score === undefined) return "lh-score--na";
+  if (score >= 90) return "lh-score--good";
+  if (score >= 50) return "lh-score--medium";
+  return "lh-score--bad";
+}
+
+function lhScoreHtml(label, score) {
+  const cls = lhScoreClass(score);
+  const display = score !== null && score !== undefined ? score : "—";
+  return `<div class="lh-score ${cls}">
+    <span class="lh-score-value">${display}</span>
+    <span class="lh-score-label">${escapeHtml(label)}</span>
+  </div>`;
+}
+
+function lighthousePanelHtml(run) {
+  const runtime = getRuntime();
+  const skillsCache = getSkillsCache();
+  const lh = run.lighthouse;
+
+  if (!lh) return "";
+
+  const { scores, audits, url, fetch_time, lighthouse_version } = lh;
+  const auditEntries = Object.values(audits || {})
+    .filter((a) => a.display_value)
+    .map((a) => `
+      <div class="timeline-entry">
+        <strong>${escapeHtml(a.title)}</strong>
+        <p>${escapeHtml(a.display_value)}</p>
+      </div>
+    `)
+    .join("");
+
+  const providers = runtime.skills?.providers_available || [];
+  const providerOptions = providers
+    .map((p) => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`)
+    .join("");
+
+  const hasLighthouseSkill = skillsCache.list.some((s) => s.name === "lighthouse-analyst");
+  const canAnalyze = hasLighthouseSkill && providers.length > 0;
+  const isAnalyzing = skillsCache.lhAnalyzing;
+  const hasAnalysis = skillsCache.lhResult && skillsCache.lhRunId === run.id;
+  const view = skillsCache.lhView || "summary";
+
+  return `
+    <div class="detail-card lighthouse-panel">
+      <p class="eyebrow">Lighthouse · <span class="lh-url">${escapeHtml(url || "")}</span></p>
+      <div class="lh-scores">
+        ${lhScoreHtml("Performance", scores.performance)}
+        ${lhScoreHtml("Accesibilidad", scores.accessibility)}
+        ${lhScoreHtml("Best Practices", scores.best_practices)}
+        ${lhScoreHtml("SEO", scores.seo)}
+      </div>
+      ${auditEntries ? `<div class="timeline lh-audits">${auditEntries}</div>` : ""}
+      <div class="meta-row" style="margin-top:0.5rem">
+        ${lighthouse_version ? `<span class="pill">v${escapeHtml(lighthouse_version)}</span>` : ""}
+        ${fetch_time ? `<span class="pill">${escapeHtml(fetch_time.slice(0, 10))}</span>` : ""}
+      </div>
+      ${canAnalyze ? `
+        <div class="skill-controls" style="margin-top:0.75rem">
+          ${providers.length > 1 ? `<select id="lh-provider-picker">${providerOptions}</select>` : `<input type="hidden" id="lh-provider-picker" value="${escapeHtml(providers[0])}" />`}
+          <button class="ghost-button" data-lighthouse-action="analyze" ${isAnalyzing ? "disabled" : ""}>
+            ${isAnalyzing ? "Analizando..." : "Analizar con IA"}
+          </button>
+          ${hasAnalysis ? `
+            <button class="ghost-button" data-lighthouse-action="toggle-view">
+              ${view === "summary" ? "Ver detalle" : "Ver resumen"}
+            </button>
+          ` : ""}
+        </div>
+        ${hasAnalysis ? renderLighthouseAnalysis(skillsCache.lhResult, view) : ""}
+      ` : ""}
+    </div>
+  `;
+}
+
+function renderLighthouseAnalysis(result, view) {
+  if (!result) return "";
+  if (!result.ok) {
+    return `<div class="skill-result skill-result-error"><p>${escapeHtml(result.error || "Error desconocido")}</p></div>`;
+  }
+
+  const output = result.output;
+  const meta = `<div class="meta-row">
+    <span class="pill">${escapeHtml(result.provider)}</span>
+    <span class="pill">${escapeHtml(result.model)}</span>
+    <span class="pill">${result.latency_ms}ms</span>
+  </div>`;
+
+  const verdictClass = output.overall_verdict === "pass"
+    ? "completed"
+    : output.overall_verdict === "fail"
+    ? "abandoned"
+    : "uncertain";
+
+  const summaryHtml = `
+    <div class="timeline-entry">
+      <span class="status-pill ${verdictClass}">${escapeHtml(output.overall_verdict || "")}</span>
+      <p>${escapeHtml(output.summary || "")}</p>
+    </div>
+  `;
+
+  if (view === "summary") {
+    return `<div class="skill-result">${meta}<div class="timeline">${summaryHtml}</div></div>`;
+  }
+
+  const findingsHtml = (output.findings || [])
+    .map((f) => `
+      <div class="timeline-entry">
+        <strong>${escapeHtml(f.label)}</strong>
+        <span class="status-pill ${severityToClass(f.severity)}">${f.severity}</span>
+        <span class="pill">${escapeHtml(f.category)}</span>
+        <p>${escapeHtml(f.detail)}</p>
+        ${f.recommendation ? `<p class="skill-recommendation">${escapeHtml(f.recommendation)}</p>` : ""}
+      </div>
+    `)
+    .join("");
+
+  return `<div class="skill-result">${meta}<div class="timeline">${summaryHtml}${findingsHtml}</div></div>`;
 }
 
 export async function drawRunObserved(run) {

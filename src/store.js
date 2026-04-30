@@ -1,6 +1,9 @@
 let state = { projects: [], personas: [], tasks: [], runs: [], calibrations: [] };
 let runtime = { mode: "loading", runner: "unknown", backend: false, mcp: "optional", skills: null };
-let skillsCache = { list: [], loaded: false, analyzing: false, lastResult: null, lastRunId: null, lastSkill: null };
+let skillsCache = {
+  list: [], loaded: false, analyzing: false, lastResult: null, lastRunId: null, lastSkill: null,
+  lhAnalyzing: false, lhResult: null, lhRunId: null, lhView: "summary"
+};
 let ui = {
   section: "projects",
   selectedProjectId: null,

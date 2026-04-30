@@ -6,9 +6,10 @@ import {
   inspectBlockingSurface,
   hasMeaningfulInteractiveTargets
 } from "./figma-surface.mjs";
+import { isFigmaUrl } from "./url-utils.mjs";
 
 export async function extendFigmaStartupWindow(page, task, deadline, timing) {
-  if (!task.url || !/figma\.com\/proto|embed\.figma\.com\/proto/i.test(task.url) || !timing.startupGraceMs) {
+  if (!task.url || !isFigmaUrl(task.url) || !timing.startupGraceMs) {
     return { kind: "skipped" };
   }
 
@@ -42,7 +43,7 @@ export async function extendFigmaStartupWindow(page, task, deadline, timing) {
 }
 
 export async function attemptBlindWakeSequence(page, task, deadline, timing) {
-  if (!timing.blindWakeEnabled || !task.url || !/figma\.com\/proto|embed\.figma\.com\/proto/i.test(task.url)) {
+  if (!timing.blindWakeEnabled || !task.url || !isFigmaUrl(task.url)) {
     return { kind: "skipped" };
   }
 
@@ -81,7 +82,7 @@ export async function getInteractionFrame(page, task = {}) {
   if (!page || isPageUnavailable(page)) {
     return inferCenteredMobileFrame(viewport);
   }
-  if (!task.url || !/figma\.com\/proto|embed\.figma\.com\/proto/i.test(task.url)) {
+  if (!task.url || !isFigmaUrl(task.url)) {
     return null;
   }
 

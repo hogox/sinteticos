@@ -21,26 +21,30 @@ function extractPersonaBiases(persona) {
   };
 }
 
-export async function collectCandidates(page, interactionFrame = null) {
-  return page.evaluate((frame) => {
-    const selectors = ["a", "button", "[role='button']", "[tabindex='0']", "[data-testid]"];
+export async function collectCandidates(page, interactionFrame = null, { isFigma = true } = {}) {
+  return page.evaluate(({ frame, isFigmaRun }) => {
+    const baseSelectors = ["a", "button", "[role='button']", "[tabindex='0']", "[data-testid]"];
+    const webSelectors = [
+      ...baseSelectors,
+      "nav a", "[role='navigation'] a", "[role='menuitem']",
+      "input[type='submit']", "input[type='button']", "[role='link']"
+    ];
+    const selectors = isFigmaRun ? baseSelectors : webSelectors;
+    const seen = new Set();
     const nodes = Array.from(document.querySelectorAll(selectors.join(",")));
     return nodes
       .map((node) => {
         const rect = node.getBoundingClientRect();
         const text = (node.innerText || node.getAttribute("aria-label") || node.getAttribute("title") || "").trim();
-        if (rect.width < 24 || rect.height < 24 || rect.top < 0 || rect.left < 0) {
-          return null;
-        }
-        if (rect.bottom > window.innerHeight + 32 || rect.right > window.innerWidth + 32) {
-          return null;
-        }
-        if (rect.width > window.innerWidth * 0.96 || rect.height > 180) {
-          return null;
-        }
-        if (text.length > 90) {
-          return null;
-        }
+        const key = `${Math.round(rect.x)},${Math.round(rect.y)},${text.slice(0, 20)}`;
+        if (seen.has(key)) return null;
+        seen.add(key);
+        if (rect.width < 14 || rect.height < 14) return null;
+        if (rect.top < -8 || rect.left < -8) return null;
+        if (rect.bottom > window.innerHeight + 32 || rect.right > window.innerWidth + 32) return null;
+        if (rect.width > window.innerWidth * 0.96) return null;
+        if (isFigmaRun && rect.height > 180) return null;
+        if (text.length > 90) return null;
         const computed = window.getComputedStyle(node);
         if (computed.pointerEvents === "none" || computed.visibility === "hidden" || computed.display === "none") {
           return null;
@@ -70,13 +74,13 @@ export async function collectCandidates(page, interactionFrame = null) {
         };
       })
       .filter(Boolean)
-      .slice(0, 24);
-  }, interactionFrame);
+      .slice(0, 32);
+  }, { frame: interactionFrame, isFigmaRun: isFigma });
 }
 
-export function chooseCandidate(candidates, task, persona, rng, step, interactionFrame = null) {
+export function chooseCandidate(candidates, task, persona, rng, step, interactionFrame = null, viewport = null, clickedTexts = null) {
   if (!candidates.length) {
-    const fallback = resolveFrameFallbackPoint(interactionFrame, step);
+    const fallback = resolveFrameFallbackPoint(interactionFrame, step, viewport);
     return {
       type: "coordinate",
       x: fallback.x,
@@ -85,7 +89,7 @@ export function chooseCandidate(candidates, task, persona, rng, step, interactio
       centerY: fallback.y,
       reason: interactionFrame
         ? "No encontre elementos semanticos visibles y probe una region probable dentro del frame mobile del prototipo."
-        : "No encontre elementos semanticos visibles y probe una region probable del prototipo.",
+        : "No encontre elementos semanticos visibles y probe una region probable de la pagina.",
       score: 44
     };
   }
@@ -124,10 +128,11 @@ export function chooseCandidate(candidates, task, persona, rng, step, interactio
           ? (isSecondaryNav ? 8 : 0)
           : 0;
       const transitionBias = candidate.hasTransition ? 16 : -4;
+      const repeatPenalty = clickedTexts && candidate.text && clickedTexts.has(candidate.text) ? 60 : 0;
 
       const score = 40 + textOverlap * 14 + ctaBias + clarityBias + cookieBias + shortLabelBias
         + speedBias + frictionBias + goalBias + mobileBias + explorationBias + transitionBias
-        - noisePenalty - restartPenalty - step * 2;
+        - noisePenalty - restartPenalty - repeatPenalty - step * 2;
       return { ...candidate, score };
     })
     .sort((a, b) => b.score - a.score);
@@ -142,9 +147,15 @@ export function chooseCandidate(candidates, task, persona, rng, step, interactio
   };
 }
 
-function resolveFrameFallbackPoint(frame, step) {
+function resolveFrameFallbackPoint(frame, step, viewport = null) {
   const pattern = step % 3 === 1 ? { x: 0.5, y: 0.78 } : step % 3 === 2 ? { x: 0.5, y: 0.45 } : { x: 0.5, y: 0.24 };
-  return resolveRelativeFramePoint(frame || { left: 0, top: 0, width: 390, height: 844 }, pattern);
+  const defaultFrame = frame || {
+    left: 0,
+    top: 0,
+    width: viewport?.width || 390,
+    height: viewport?.height || 844
+  };
+  return resolveRelativeFramePoint(defaultFrame, pattern);
 }
 
 function resolveRelativeFramePoint(frame, point) {

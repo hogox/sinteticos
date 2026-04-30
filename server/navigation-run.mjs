@@ -1,6 +1,7 @@
 import path from "node:path";
 import { promises as fs } from "node:fs";
-import { ARTIFACTS_DIR } from "./config.mjs";
+import { ARTIFACTS_DIR, BROWSER_HEADLESS } from "./config.mjs";
+import { isFigmaUrl } from "./url-utils.mjs";
 import { uid } from "./utils.mjs";
 import { hashString, mulberry32 } from "../shared/utils.js";
 import {
@@ -30,6 +31,24 @@ import {
 import { buildRecoveredErrorRun } from "./error-runs.mjs";
 import { simulateRun } from "../shared/simulation.js";
 import { isVisionAvailable, analyzeScreenWithVision, mapVisionCoordsToPage } from "./vision.mjs";
+
+const CLOUDFLARE_RE = /just a moment|managed challenge|un momento|checking your browser|enable javascript and cookies/i;
+
+async function waitForCloudflare(page, extraWaitMs = 1000) {
+  try {
+    const title = await page.title().catch(() => "");
+    if (!CLOUDFLARE_RE.test(title)) return;
+    console.log("[run] Cloudflare challenge detectado — esperando resolucion (max 18s)...");
+    await page.waitForFunction(
+      () => !/just a moment|managed challenge|un momento|checking your browser|enable javascript and cookies/i.test(document.title),
+      { timeout: 18000 }
+    ).catch(() => {});
+    await page.waitForLoadState("networkidle", { timeout: 5000 }).catch(() => {});
+    await page.waitForTimeout(extraWaitMs);
+  } catch {
+    // ignore
+  }
+}
 
 export async function executeNavigationRun(task, persona, iteration, playwright) {
   if (!playwright) {
@@ -72,26 +91,52 @@ export async function executeNavigationRun(task, persona, iteration, playwright)
     viewport: null
   };
 
+  const isFigma = isFigmaUrl(task.url);
   let browser;
   let completionStatus = "completed";
-  let executionNotes = "Navegacion real con Playwright.";
+  let executionNotes = isFigma
+    ? "Navegacion real con Playwright."
+    : "Navegacion real con Playwright sobre sitio web (modo visible).";
   let usedBlindWake = false;
 
   try {
-    browser = await playwright.chromium.launch({ headless: false });
-    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    // Web runs always use visible browser — Cloudflare Managed Challenge cannot be solved in headless mode
+    browser = await playwright.chromium.launch({ headless: isFigma ? BROWSER_HEADLESS : false });
+    const viewportWidth = isFigma ? 390 : (task.viewport_width || 1280);
+    const viewportHeight = isFigma ? 844 : (task.viewport_height || 800);
+    let page = await browser.newPage({ viewport: { width: viewportWidth, height: viewportHeight } });
     context.page = page;
     context.viewport = page.viewportSize();
     page.setDefaultTimeout(timing.pageActionTimeoutMs);
     page.setDefaultNavigationTimeout(timing.pageNavigationTimeoutMs);
-    // Strip show-proto-sidebar from embed URLs to avoid layout disruption
+    if (!isFigma) {
+      // Basic stealth: hide webdriver flag read by Cloudflare and other bot-detection scripts
+      await page.addInitScript(() => {
+        Object.defineProperty(navigator, "webdriver", { get: () => undefined });
+        delete window.cdc_adoQpoasnfa76pfcZLmcfl_Array;
+        delete window.cdc_adoQpoasnfa76pfcZLmcfl_Promise;
+        delete window.cdc_adoQpoasnfa76pfcZLmcfl_Symbol;
+      });
+    }
     let navUrl = task.url;
-    if (/embed\.figma\.com\/proto/i.test(navUrl)) {
+    if (isFigma && /embed\.figma\.com\/proto/i.test(navUrl)) {
       navUrl = navUrl.replace(/[?&]show-proto-sidebar=\d/gi, "");
     }
     await page.goto(navUrl, { waitUntil: "domcontentloaded", timeout: timing.gotoTimeoutMs });
-    await page.waitForTimeout(timing.initialWaitMs);
-    let initialSurface = await settleFigmaSurface(page, deadline, timing, task);
+    if (isFigma) {
+      await page.waitForTimeout(timing.initialWaitMs);
+    } else {
+      try {
+        await page.waitForLoadState("networkidle", { timeout: 8000 });
+      } catch {
+        await page.waitForTimeout(timing.initialWaitMs);
+      }
+      // Wait for any Cloudflare challenge on the initial page load to auto-resolve
+      await waitForCloudflare(page, timing.initialWaitMs);
+    }
+    let initialSurface = isFigma
+      ? await settleFigmaSurface(page, deadline, timing, task)
+      : { kind: "clear" };
     if (initialSurface.kind === "login-wall") {
       return buildBlockedRun(task, persona, startedAt, seed, runId, rng, "Llegue a una pantalla de acceso o registro y no pude entrar al prototipo real.", "El prototipo quedo bloqueado por la capa de acceso de Figma. Se necesita una URL mas publica o permisos distintos.", runDir, page);
     }
@@ -123,9 +168,10 @@ export async function executeNavigationRun(task, persona, iteration, playwright)
     }
     context.interactionFrame = context.interactionFrame || (await getInteractionFrame(page, task));
     context.interactionFrame = await refineFrameByPixelAnalysis(page, context.interactionFrame);
-    const useVision = isVisionAvailable() && /figma\.com\/proto|embed\.figma\.com\/proto/i.test(task.url);
+    const useVision = isVisionAvailable() && (isFigma || task.vision_enabled === true);
     // Always clip screenshots to the interaction frame (prototype area only)
     const previousActions = [];
+    const clickedTexts = new Set();
     if (useVision) {
       console.log("[run] Vision mode enabled (model:", process.env.SINTETICOS_VISION_MODEL || "claude-haiku-4-5-20251001", ")");
     }
@@ -153,7 +199,9 @@ export async function executeNavigationRun(task, persona, iteration, playwright)
         break;
       }
 
-      const guardrailStatus = await settleFigmaSurface(page, deadline, timing, task);
+      const guardrailStatus = isFigma
+        ? await settleFigmaSurface(page, deadline, timing, task)
+        : { kind: "clear" };
       if (guardrailStatus.kind === "login-wall") {
         completionStatus = "abandoned";
         executionNotes = "El prototipo quedo bloqueado por la capa de acceso de Figma. Se necesita una URL mas publica o permisos distintos.";
@@ -235,8 +283,17 @@ export async function executeNavigationRun(task, persona, iteration, playwright)
       }
 
       if (!plan) {
-        const candidates = await collectCandidates(page, activeFrame);
-        plan = chooseCandidate(candidates, task, persona, rng, step, activeFrame);
+        const candidateOpts = { isFigma };
+        let candidates = await collectCandidates(page, activeFrame, candidateOpts);
+        if (!isFigma && candidates.length === 0) {
+          // Scroll down and retry — content may be below the fold
+          for (let scrollAttempt = 0; scrollAttempt < 2 && candidates.length === 0; scrollAttempt++) {
+            await page.mouse.wheel(0, 400);
+            await page.waitForTimeout(600);
+            candidates = await collectCandidates(page, activeFrame, candidateOpts);
+          }
+        }
+        plan = chooseCandidate(candidates, task, persona, rng, step, activeFrame, context.viewport, clickedTexts);
       }
 
       if (!plan) {
@@ -253,9 +310,19 @@ export async function executeNavigationRun(task, persona, iteration, playwright)
       }
 
       // --- Click ---
+      if (plan.type === "candidate" && plan.text) clickedTexts.add(plan.text);
       await page.mouse.click(plan.centerX || plan.x, plan.centerY || plan.y);
 
-      await page.waitForTimeout(Math.min(1200, timing.interactiveWaitMs));
+      if (isFigma) {
+        await page.waitForTimeout(Math.min(1200, timing.interactiveWaitMs));
+      } else {
+        try {
+          await page.waitForLoadState("networkidle", { timeout: 4000 });
+        } catch {
+          await page.waitForTimeout(1500);
+        }
+        await waitForCloudflare(page, 1000);
+      }
       const nextFingerprint = await safeFingerprintPage(page);
       const nextScreen = plan.screenDescription || await safeGetScreenLabel(page, step + 1);
       const certainty = Math.max(40, Math.min(92, Math.round(plan.score || 64)));
@@ -293,7 +360,7 @@ export async function executeNavigationRun(task, persona, iteration, playwright)
         currentScreen = nextScreen;
         context.currentScreen = currentScreen;
         previousFingerprint = nextFingerprint;
-      } else if (!useVision && step >= 2) {
+      } else if (!useVision && step >= 2 && isFigma) {
         completionStatus = "abandoned";
         executionNotes = "La pantalla no cambio despues de intentos repetidos.";
         await safeCaptureScreenshot(page, runDir, screenshots, currentScreen, step + 1, runId, context.interactionFrame);
@@ -322,6 +389,18 @@ export async function executeNavigationRun(task, persona, iteration, playwright)
 
     const findings = buildFindings(task, persona, completionStatus, rng);
     const endedAt = new Date();
+
+    let lighthouseData = null;
+    if (task.lighthouse_enabled && task.url) {
+      try {
+        const { runLighthouse } = await import("./lighthouse-runner.mjs");
+        const formFactor = isFigma ? "mobile" : (task.lighthouse_form_factor || "desktop");
+        lighthouseData = await runLighthouse(task.url, { formFactor });
+      } catch (lhError) {
+        console.error("[lighthouse] Error durante auditoria:", lhError.message);
+      }
+    }
+
     return {
       id: runId,
       project_id: task.project_id || persona.project_id || null,
@@ -362,12 +441,13 @@ export async function executeNavigationRun(task, persona, iteration, playwright)
         ]
       },
       follow_up_questions: buildFollowUps(task, completionStatus),
-      engine: useVision ? "playwright-vision" : "playwright",
+      engine: useVision ? "playwright-vision" : isFigma ? "playwright" : "playwright-web",
       execution_notes: useVision
         ? "Navegacion real con Playwright + Claude Vision API para analisis de canvas."
         : executionNotes,
       mcp_enabled: task.mcp_enabled,
-      source: "server-playwright"
+      source: "server-playwright",
+      lighthouse: lighthouseData
     };
   } catch (error) {
     const fallback = buildRecoveredErrorRun(task, persona, iteration, error, context, {
