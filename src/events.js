@@ -11,7 +11,7 @@ import {
   handleTaskAction,
   handleRunAction
 } from "./handlers.js";
-import { getUi, getState, setSkillsCache } from "./store.js";
+import { getUi, getState, setSkillsCache, getSkillsCache } from "./store.js";
 import { render } from "./render.js";
 import { renderRuns, renderTasks } from "./render-entities.js";
 import { api } from "./api.js";
@@ -116,8 +116,39 @@ async function handleSkillAnalyzeBatch() {
   renderRuns();
 }
 
+async function handleLighthouseAnalyze() {
+  const ui = getUi();
+  if (!ui.selectedRunId) return;
+  const providerPicker = document.getElementById("lh-provider-picker");
+  const provider = providerPicker?.value || undefined;
+  setSkillsCache({ lhAnalyzing: true });
+  renderRuns();
+  try {
+    const result = await api.runSkill("lighthouse-analyst", { runIds: [ui.selectedRunId], provider });
+    setSkillsCache({ lhResult: result, lhRunId: ui.selectedRunId });
+  } catch (error) {
+    setSkillsCache({ lhResult: { ok: false, error: error.message }, lhRunId: ui.selectedRunId });
+  }
+  setSkillsCache({ lhAnalyzing: false });
+  renderRuns();
+}
+
+function handleLighthouseToggleView() {
+  const cache = getSkillsCache();
+  setSkillsCache({ lhView: cache.lhView === "summary" ? "detail" : "summary" });
+  renderRuns();
+}
+
 export function onClick(event) {
   const ui = getUi();
+
+  const lhAction = event.target.closest("[data-lighthouse-action]");
+  if (lhAction) {
+    const action = lhAction.dataset.lighthouseAction;
+    if (action === "analyze") handleLighthouseAnalyze();
+    else if (action === "toggle-view") handleLighthouseToggleView();
+    return;
+  }
 
   const skillAction = event.target.closest("[data-skill-action]");
   if (skillAction) {

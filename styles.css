@@ -1677,3 +1677,72 @@ code {
   opacity: 0.85;
   margin-top: 0.25rem;
 }
+
+/* Lighthouse panel */
+.lighthouse-panel {
+  margin-top: 1rem;
+}
+
+.lh-scores {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin: 0.75rem 0 0.5rem;
+}
+
+.lh-score {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  border: 3px solid currentColor;
+  gap: 0.1rem;
+}
+
+.lh-score-value {
+  font-size: 1.2rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.lh-score-label {
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.lh-score--good {
+  color: #16a34a;
+  background: #f0fdf4;
+}
+
+.lh-score--medium {
+  color: #b45309;
+  background: #fffbeb;
+}
+
+.lh-score--bad {
+  color: #dc2626;
+  background: #fef2f2;
+}
+
+.lh-score--na {
+  color: var(--muted);
+  background: var(--surface-muted);
+}
+
+.lh-audits {
+  margin-top: 0.5rem;
+}
+
+.lh-url {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 400;
+}

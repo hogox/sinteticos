@@ -25,6 +25,9 @@ const VISION_MAX_TOKENS = 512;
 const VISION_API_URL = "https://api.anthropic.com";
 const VISION_RETRY_DELAY_MS = 2000;
 const VISION_SPEND_LIMIT_USD = Number(process.env.SINTETICOS_VISION_LIMIT_USD || 5);
+const BROWSER_HEADLESS = process.env.SINTETICOS_BROWSER_HEADLESS !== "false";
+const LIGHTHOUSE_ENABLED = process.env.SINTETICOS_LIGHTHOUSE !== "false";
+const LIGHTHOUSE_TIMEOUT_MS = Number(process.env.SINTETICOS_LIGHTHOUSE_TIMEOUT_MS || 60000);
 
 const DEFAULT_BLIND_WAKE_POINTS = [
   { x: 0.5, y: 0.52, label: "center" },
@@ -59,5 +62,8 @@ export {
   VISION_API_URL,
   VISION_RETRY_DELAY_MS,
   VISION_SPEND_LIMIT_USD,
+  BROWSER_HEADLESS,
+  LIGHTHOUSE_ENABLED,
+  LIGHTHOUSE_TIMEOUT_MS,
   execFile
 };
