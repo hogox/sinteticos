@@ -32,6 +32,7 @@ import {
 } from "./persona-modes.js";
 import { openPersonaModal, closePersonaModal } from "./persona-modal.js";
 import { openProjectModal, closeProjectModal } from "./project-modal.js";
+import { openTaskModal, closeTaskModal } from "./task-modal.js";
 
 export function bindEvents() {
   document.addEventListener("click", onClick);
@@ -60,6 +61,11 @@ export function bindEvents() {
   document.getElementById("persona-upload-reset").addEventListener("click", resetUploadForm);
   bindPersonaPreviewEvents();
   bindPersonaUploadEvents();
+  document.getElementById("create-task-btn").addEventListener("click", openTaskModal);
+  document.getElementById("task-modal-close").addEventListener("click", closeTaskModal);
+  document.getElementById("task-modal").addEventListener("click", (event) => {
+    if (event.target.id === "task-modal") closeTaskModal();
+  });
   document.getElementById("task-reset").addEventListener("click", resetTaskForm);
   document.getElementById("seed-demo").addEventListener("click", resetDemoData);
   document.getElementById("export-state").addEventListener("click", exportState);
@@ -78,6 +84,8 @@ export function bindEvents() {
     const ui = getUi();
     if (event.key === "Escape") {
       if (ui.chatDrawer?.open) { closeChatDrawer(); return; }
+      const taskModal = document.getElementById("task-modal");
+      if (taskModal && !taskModal.classList.contains("hidden")) { closeTaskModal(); return; }
       const projectModal = document.getElementById("project-modal");
       if (projectModal && !projectModal.classList.contains("hidden")) { closeProjectModal(); return; }
       const personaModal = document.getElementById("persona-modal");

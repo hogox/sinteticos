@@ -33,7 +33,7 @@
 
           <p class="nav-group-header hidden" data-nav-group="aplicaciones">Aplicaciones</p>
           <button class="nav-tab hidden" data-section="personas" data-section-group="aplicaciones" data-icon="PE">Personas</button>
-          <button class="nav-tab hidden" data-section="tasks" data-section-group="aplicaciones" data-icon="TA">Tasks</button>
+          <button class="nav-tab hidden" data-section="tasks" data-section-group="aplicaciones" data-icon="TA">Tareas</button>
           <button class="nav-tab hidden" data-section="runs" data-section-group="aplicaciones" data-icon="RU">Runs</button>
           <button class="nav-tab hidden" data-section="calibration" data-section-group="aplicaciones" data-icon="CA">Calibration</button>
 
@@ -244,74 +244,22 @@
         </section>
 
         <section class="section" id="section-tasks" aria-label="Tasks de prueba">
-          <div class="section-grid">
-            <article class="panel">
-              <div class="panel-header">
-                <div>
-                  <p class="eyebrow">Tasks</p>
-                  <h3>Tareas registradas</h3>
-                </div>
+          <article class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Diseño de tareas</p>
+                <h3>Tareas de investigación</h3>
               </div>
-              <div class="stacked-list" id="task-list"></div>
-            </article>
-
-            <article class="panel panel-form">
-              <div class="panel-header">
-                <div>
-                  <p class="eyebrow">Task editor</p>
-                  <h3 id="task-form-title">Crear task</h3>
-                </div>
-              </div>
-              <form id="task-form" class="form-grid">
-                <input type="hidden" name="id" />
-                <label>
-                  Persona base
-                  <select name="persona_id" id="task-persona-select" required></select>
-                </label>
-                <label>
-                  Tipo
-                  <select name="type" id="task-type">
-                    <option value="navigation">navigation</option>
-                    <option value="idea">idea</option>
-                  </select>
-                </label>
-                <label>Prompt / Objetivo<textarea name="prompt" rows="3" required></textarea></label>
-                <label>URL Figma o contexto<input name="url" placeholder="https://..." /></label>
-                <label>Criterio de exito<textarea name="success_criteria" rows="2"></textarea></label>
-                <label>Max steps<input type="number" min="2" max="12" name="max_steps" value="5" /></label>
-                <label class="checkbox-field">
-                  <input type="checkbox" name="mcp_enabled" />
-                  URL + MCP opcional
-                </label>
-                <label class="checkbox-field">
-                  <input type="checkbox" name="predictive_attention_enabled" />
-                  Predictive attention
-                </label>
-                <label class="checkbox-field">
-                  <input type="checkbox" name="artifacts_enabled" checked />
-                  Guardar artefactos
-                </label>
-                <label class="checkbox-field">
-                  <input type="checkbox" name="lighthouse_enabled" />
-                  Auditoría Lighthouse
-                </label>
-                <label class="checkbox-field">
-                  <input type="checkbox" name="vision_enabled" />
-                  Vision en web (requiere ANTHROPIC_API_KEY)
-                </label>
-                <div class="form-actions">
-                  <button type="submit">Guardar task</button>
-                  <button type="button" class="ghost-button" id="task-reset">Limpiar</button>
-                </div>
-              </form>
-            </article>
-          </div>
+              <button class="primary-button" id="create-task-btn">+ Crear tarea</button>
+            </div>
+            <div class="stacked-list" id="task-list"></div>
+          </article>
 
           <article class="panel">
             <div class="panel-header">
               <div>
                 <p class="eyebrow">Runner</p>
-                <h3>Lanzar corridas</h3>
+                <h3>Lanzar recorridos</h3>
               </div>
             </div>
             <form id="run-form" class="filters-grid">
@@ -320,14 +268,14 @@
                 <select name="personaId" id="run-persona"></select>
               </label>
               <label>
-                Task
+                Tarea
                 <select name="taskId" id="run-task"></select>
               </label>
               <label>
-                Numero de runs
+                Número de corridas
                 <input type="number" name="runCount" min="1" max="8" value="3" />
               </label>
-              <button type="submit">Ejecutar simulacion</button>
+              <button type="submit">Ejecutar simulación</button>
             </form>
           </article>
         </section>
@@ -482,6 +430,58 @@
           <button class="ghost-button" type="button" id="confirm-modal-cancel">Cancelar</button>
           <button class="danger-button" type="button" id="confirm-modal-confirm">Confirmar</button>
         </div>
+      </div>
+    </div>
+
+    <!-- Task form modal -->
+    <div class="modal-backdrop hidden" id="task-modal" aria-hidden="true">
+      <div class="project-form-modal" role="dialog" aria-modal="true" aria-labelledby="task-form-title">
+        <div class="project-form-modal__header">
+          <h3 id="task-form-title">Crear tarea</h3>
+          <button class="project-form-modal__close" id="task-modal-close" aria-label="Cerrar">×</button>
+        </div>
+        <form id="task-form" class="form-grid">
+          <input type="hidden" name="id" />
+          <label>
+            Persona base
+            <select name="persona_id" id="task-persona-select" required></select>
+          </label>
+          <label>
+            Tipo de experiencia
+            <select name="type" id="task-type">
+              <option value="navigation">Recorrido guiado</option>
+              <option value="idea">Exploración de idea</option>
+            </select>
+          </label>
+          <label>Qué quieres que intente lograr<textarea name="prompt" rows="3" placeholder="Ej: encontrar un plan, entender una propuesta o completar una reserva" required></textarea></label>
+          <label>URL del prototipo o contexto<input name="url" placeholder="https://..." /></label>
+          <label>Cómo sabremos que le fue bien<textarea name="success_criteria" rows="2" placeholder="Ej: llega al final sin trabarse y entiende qué pasó"></textarea></label>
+          <label>Máximo de pasos<input type="number" min="2" max="12" name="max_steps" value="5" /></label>
+          <label class="checkbox-field">
+            <input type="checkbox" name="mcp_enabled" />
+            Usar ayuda MCP cuando aplique
+          </label>
+          <label class="checkbox-field">
+            <input type="checkbox" name="predictive_attention_enabled" />
+            Estimar atención visual
+          </label>
+          <label class="checkbox-field">
+            <input type="checkbox" name="artifacts_enabled" checked />
+            Guardar evidencia del recorrido
+          </label>
+          <label class="checkbox-field">
+            <input type="checkbox" name="lighthouse_enabled" />
+            Incluir revisión Lighthouse
+          </label>
+          <label class="checkbox-field">
+            <input type="checkbox" name="vision_enabled" />
+            Usar visión web si está disponible
+          </label>
+          <div class="form-actions">
+            <button type="submit">Guardar tarea</button>
+            <button type="button" class="ghost-button" id="task-reset">Limpiar</button>
+          </div>
+        </form>
       </div>
     </div>
 

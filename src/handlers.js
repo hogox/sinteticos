@@ -117,8 +117,8 @@ export async function onTaskSubmit(event) {
 
   if (ui.editingTaskId) {
     const confirmed = await confirmAction({
-      title: "Actualizar task",
-      body: `Se guardaran los cambios de ${payload.prompt || "esta task"}. Puedes cancelar y seguir ajustando el objetivo antes de confirmar.`,
+      title: "Actualizar tarea",
+      body: `Se guardarán los cambios de ${payload.prompt || "esta tarea"}. Puedes cancelar y seguir ajustando el objetivo antes de confirmar.`,
       confirmLabel: "Actualizar"
     });
     if (!confirmed) {
@@ -129,6 +129,8 @@ export async function onTaskSubmit(event) {
     setState(await api.createTask(payload));
   }
   ui.editingTaskId = null;
+  const { closeTaskModal } = await import("./task-modal.js");
+  closeTaskModal();
   ensureSelection();
   render();
   event.currentTarget.reset();
@@ -137,20 +139,20 @@ export async function onTaskSubmit(event) {
 function validateTaskForRun(task, persona) {
   const issues = [];
   if (!task) {
-    issues.push("No se encontró la task seleccionada.");
+    issues.push("No se encontró la tarea seleccionada.");
     return issues;
   }
   if (!persona) {
-    issues.push("La task no tiene una persona asignada.");
+    issues.push("La tarea no tiene una persona asignada.");
   }
   if (!task.prompt || task.prompt.trim() === "") {
-    issues.push("El campo Prompt / Objetivo está vacío.");
+    issues.push("El objetivo de la tarea está vacío.");
   }
   const url = (task.url || "").trim();
   if (!url) {
     issues.push("La URL del prototipo Figma está vacía.");
   } else if (url.startsWith("REEMPLAZAR") || url.toLowerCase().includes("placeholder")) {
-    issues.push(`La URL sigue siendo un placeholder: "${url}". Editá la task y pegá el link real de Figma.`);
+    issues.push(`La URL sigue siendo un placeholder: "${url}". Edita la tarea y pega el link real de Figma.`);
   } else if (!url.startsWith("http")) {
     issues.push(`La URL no parece válida: "${url}".`);
   }
@@ -410,13 +412,15 @@ export async function handleTaskAction(action, id) {
   if (action === "edit") {
     ui.editingTaskId = id;
     fillTaskForm(task);
+    const { openTaskModal } = await import("./task-modal.js");
+    openTaskModal();
     return;
   }
 
   if (action === "delete") {
     const confirmed = await confirmAction({
-      title: "Eliminar task",
-      body: "Se eliminara esta task del laboratorio. Puedes cancelar si todavia quieres conservarla para futuras corridas.",
+      title: "Eliminar tarea",
+      body: "Se eliminará esta tarea del laboratorio. Puedes cancelar si todavía quieres conservarla para futuras corridas.",
       confirmLabel: "Eliminar"
     });
     if (!confirmed) {
