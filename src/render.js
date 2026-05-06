@@ -5,12 +5,14 @@ import { renderProjects, renderPersonas, renderTasks, renderRuns, renderCalibrat
 import { renderDashboard } from "./render-dashboard.js";
 import { renderPersonaDetail } from "./render-persona-detail.js";
 import { renderChatDrawer } from "./render-chat-drawer.js";
+import { renderHome } from "./render-home.js";
 import { syncHashWithUi } from "./router.js";
 
 export function render() {
   renderSection();
   renderRuntimeBadge();
   renderPolicy();
+  renderHome();
   renderProjects();
   renderPersonas();
   renderPersonaDetail();
@@ -28,7 +30,7 @@ export function renderSection() {
   const sections = getSections();
   const navTabs = getNavTabs();
   if (!ui.selectedProjectId && requiresProject(ui.section)) {
-    ui.section = "projects";
+    ui.section = "home";
   }
   if (!ui.selectedProjectId && ui.section === "dashboard") {
     ui.section = "projects";
@@ -36,28 +38,49 @@ export function renderSection() {
   if (ui.section === "persona-detail" && !getPersonaById(ui.personaDetailId, getState())) {
     ui.section = "personas";
   }
+  // Visibilidad: tabs siempre visibles (personas, projects, policy).
+  // Child tabs (Dashboard, Tareas, Runs, Calibration) solo cuando hay proyecto seleccionado.
   navTabs.forEach((tab) => {
-    const shouldHide = tab.dataset.section !== "projects" && !ui.selectedProjectId;
+    const section = tab.dataset.section;
+    const alwaysVisible = ["personas", "projects", "policy"].includes(section);
+    const shouldHide = !alwaysVisible && !ui.selectedProjectId;
     tab.classList.toggle("hidden", shouldHide);
   });
-  navTabs.forEach((tab) =>
-    tab.classList.toggle("is-active", tab.dataset.section === ui.section || (ui.section === "persona-detail" && tab.dataset.section === "personas"))
-  );
+
+  // Active state.
+  const projectScopedSections = new Set(["dashboard", "tasks", "runs", "calibration"]);
+  navTabs.forEach((tab) => {
+    const section = tab.dataset.section;
+    const isActive =
+      section === ui.section ||
+      (ui.section === "persona-detail" && section === "personas");
+    tab.classList.toggle("is-active", isActive);
+    // Projects tab: is-parent-active cuando estamos en una subsección del proyecto.
+    if (section === "projects") {
+      const inProjectScope = projectScopedSections.has(ui.section) && !!ui.selectedProjectId;
+      tab.classList.toggle("is-parent-active", inProjectScope);
+    }
+  });
+
   navTabs.forEach((tab) => tab.classList.toggle("is-disabled", !ui.selectedProjectId && requiresProject(tab.dataset.section)));
   sections.forEach((section) => section.classList.toggle("is-active", section.id === `section-${ui.section}`));
 
-  // Toggle nav group headers
-  document.querySelectorAll(".nav-group-header").forEach((header) => {
-    header.classList.toggle("hidden", !ui.selectedProjectId);
-  });
+  // Projects tab label: muestra el proyecto activo cuando hay uno seleccionado.
+  const projectsTab = document.getElementById("nav-projects-tab");
+  if (projectsTab) {
+    const project = getProjectById(ui.selectedProjectId, getState());
+    const label = project ? project.name : "Projects";
+    const lastNode = projectsTab.childNodes[projectsTab.childNodes.length - 1];
+    if (lastNode) lastNode.textContent = label;
+    projectsTab.dataset.icon = project ? label.slice(0, 2).toUpperCase() : "PR";
+  }
 
-  // Dashboard tab label + icon = project name
+  // Dashboard tab keeps generic label.
   const dashTab = document.getElementById("nav-dashboard-tab");
   if (dashTab) {
-    const project = getProjectById(ui.selectedProjectId, getState());
-    const label = project ? project.name : "Dashboard";
-    dashTab.childNodes[dashTab.childNodes.length - 1].textContent = label;
-    dashTab.dataset.icon = project ? label.slice(0, 2).toUpperCase() : "DA";
+    const lastNode = dashTab.childNodes[dashTab.childNodes.length - 1];
+    if (lastNode) lastNode.textContent = "Dashboard";
+    dashTab.dataset.icon = "DA";
   }
 
   // Topbar breadcrumb
@@ -75,8 +98,16 @@ export function renderSection() {
     dateEl.dataset.set = "1";
   }
 
+  if (ui.section === "home") {
+    sectionTitle.textContent = "Inicio";
+    return;
+  }
   if (ui.section === "projects") {
     sectionTitle.textContent = "Projects";
+    return;
+  }
+  if (ui.section === "personas") {
+    sectionTitle.textContent = "Personas";
     return;
   }
   if (ui.section === "tasks") {

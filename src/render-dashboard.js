@@ -21,7 +21,10 @@ export function renderDashboard() {
   const globalTasks = state.tasks || [];
   const globalRuns = state.runs || [];
   const globalCalibrations = state.calibrations || [];
-  const projectPersonas = project ? state.personas.filter((item) => item.project_id === project.id) : [];
+  // Personas usadas en este proyecto = únicas en runs.persona_id
+  const projectRunsForPersonaCount = project ? (state.runs || []).filter((r) => r.project_id === project.id) : [];
+  const projectPersonaIds = new Set(projectRunsForPersonaCount.map((r) => r.persona_id));
+  const projectPersonas = (state.personas || []).filter((p) => projectPersonaIds.has(p.id));
   const projectTasks = project ? state.tasks.filter((item) => item.project_id === project.id) : [];
   const globalHero = document.getElementById("hero-meta-global");
   const globalMetrics = document.getElementById("global-metrics-grid");
@@ -44,7 +47,8 @@ export function renderDashboard() {
     globalProjectList.innerHTML =
       globalProjects
         .map((item) => {
-          const personas = globalPersonas.filter((entry) => entry.project_id === item.id).length;
+          const itemRuns = globalRuns.filter((entry) => entry.project_id === item.id);
+          const personas = new Set(itemRuns.map((r) => r.persona_id)).size;
           const tasks = globalTasks.filter((entry) => entry.project_id === item.id).length;
           const runs = globalRuns.filter((entry) => entry.project_id === item.id).length;
           return `

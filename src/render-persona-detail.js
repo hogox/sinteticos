@@ -132,6 +132,24 @@ function definitionItem(label, value) {
   `;
 }
 
+const HERO_AVATAR_PALETTE = ["#2563eb", "#7c3aed", "#0891b2", "#059669", "#d97706", "#dc2626", "#db2777", "#65a30d"];
+
+function heroAvatarColor(name) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) & 0xffffffff;
+  return HERO_AVATAR_PALETTE[Math.abs(hash) % HERO_AVATAR_PALETTE.length];
+}
+
+function heroInitials(name) {
+  return String(name || "P")
+    .split(" ")
+    .map((w) => w[0])
+    .filter(Boolean)
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
+
 function comparisonRow(label, currentText, peerText, delta, caption) {
   return `
     <article class="comparison-row">
@@ -141,7 +159,7 @@ function comparisonRow(label, currentText, peerText, delta, caption) {
       </div>
       <div class="comparison-row__values">
         <span class="pill">${escapeHtml(currentText)}</span>
-        <span class="pill">Proyecto ${escapeHtml(peerText)}</span>
+        <span class="pill">Pool ${escapeHtml(peerText)}</span>
         <span class="status-pill ${delta.className}">${escapeHtml(delta.text)}</span>
       </div>
     </article>
@@ -365,12 +383,47 @@ function renderAnchorOptions(runs, selectedRunId) {
   return options.join("");
 }
 
+const VERDICT_META = {
+  would_adopt: { label: "Lo adoptaría", className: "verdict-pill verdict-pill--adopt" },
+  would_reject: { label: "No lo adoptaría", className: "verdict-pill verdict-pill--reject" },
+  conditional: { label: "Depende de condiciones", className: "verdict-pill verdict-pill--conditional" },
+  unclear: { label: "No me alcanza para decidir", className: "verdict-pill verdict-pill--unclear" }
+};
+
+function renderVerdictBlock(message) {
+  if (!message.verdict) return "";
+  const meta = VERDICT_META[message.verdict] || VERDICT_META.unclear;
+  const conditions = Array.isArray(message.conditions) ? message.conditions : [];
+  const frictions = Array.isArray(message.frictions) ? message.frictions : [];
+  return `
+    <div class="hypothesis-verdict">
+      <span class="${meta.className}">${escapeHtml(meta.label)}</span>
+      ${message.verdict_reason ? `<p class="hypothesis-verdict__reason">${escapeHtml(message.verdict_reason)}</p>` : ""}
+      ${
+        conditions.length
+          ? `<div class="hypothesis-verdict__group"><strong>Condiciones</strong><ul>${conditions.map((c) => `<li>${escapeHtml(c)}</li>`).join("")}</ul></div>`
+          : ""
+      }
+      ${
+        frictions.length
+          ? `<div class="hypothesis-verdict__group"><strong>Frenos</strong><ul>${frictions.map((f) => `<li>${escapeHtml(f)}</li>`).join("")}</ul></div>`
+          : ""
+      }
+    </div>
+  `;
+}
+
 function renderMessages(thread) {
   if (!thread || !thread.messages?.length) {
-    return emptyStateMarkup("Escribe una pregunta para que responda desde su perfil, historial y contexto.");
+    const placeholder =
+      thread?.kind === "hypothesis"
+        ? "Plantea una hipótesis concreta (ej: '¿Comprarías esto a $40 al mes?'). La persona responde con un veredicto."
+        : "Escribe una pregunta para que responda desde su perfil, historial y contexto.";
+    return emptyStateMarkup(placeholder);
   }
 
-  const showEvidenceMetadata = thread.mode === "evidence";
+  const isHypothesisThread = thread.kind === "hypothesis";
+  const showEvidenceMetadata = !isHypothesisThread && thread.mode === "evidence";
 
   return thread.messages
     .map((message) => {
@@ -387,6 +440,7 @@ function renderMessages(thread) {
             }
             ${messageTime(message) ? `<span class="pill">${messageTime(message)}</span>` : ""}
           </div>
+          ${isHypothesisThread && personaMessage ? renderVerdictBlock(message) : ""}
           <p>${escapeHtml(message.content)}</p>
           ${
             showEvidenceMetadata && personaMessage && (citations.run_ids?.length || citations.task_ids?.length || message.reasoning_note)
@@ -405,19 +459,24 @@ function renderMessages(thread) {
     .join("");
 }
 
-export function renderPersonaChat({ conversations, selectedThread, runs, ui }) {
+export function renderPersonaChat({ conversations, selectedThread, runs, ui, mode }) {
   const selectedMode = selectedThread?.mode || ui.personaChatMode || "free";
   const selectedAnchor = selectedThread?.anchor_run_id || ui.personaChatAnchorRunId || "";
+  const isHypothesis = mode === "hypothesis";
+  const title = isHypothesis ? "Validar hipótesis" : "Conversar con la persona";
+  const eyebrow = isHypothesis ? "Hipótesis" : "Chat";
+  const newChatLabel = isHypothesis ? "Nueva hipótesis" : "Nuevo chat";
+  const newChatAction = isHypothesis ? "new-hypothesis" : "new-chat";
   return `
     <article class="panel persona-chat-panel">
       <div class="panel-header">
         <div>
-          <p class="eyebrow">Chat</p>
-          <h3>Conversar con la persona</h3>
+          <p class="eyebrow">${eyebrow}</p>
+          <h3>${title}</h3>
         </div>
         <div class="persona-chat-actions">
           ${renderConversationTabs(conversations, selectedThread?.id || null)}
-          <button type="button" class="ghost-button" data-persona-detail-action="new-chat">Nuevo chat</button>
+          <button type="button" class="ghost-button" data-persona-detail-action="${newChatAction}">${newChatLabel}</button>
         </div>
       </div>
 
@@ -426,27 +485,45 @@ export function renderPersonaChat({ conversations, selectedThread, runs, ui }) {
           ${renderMessages(selectedThread)}
         </div>
         <form id="persona-chat-form" class="persona-chat-form">
-          <div class="filters-grid persona-chat-controls">
-            <label>
-              Modo
-              <select name="mode">
-                <option value="free" ${selectedMode === "free" ? "selected" : ""}>Conversar con la persona</option>
-                <option value="evidence" ${selectedMode === "evidence" ? "selected" : ""}>Preguntar sobre evidencia</option>
-              </select>
-            </label>
-            <label>
-              Run de referencia
-              <select name="anchorRunId">
-                ${renderAnchorOptions(runs, selectedAnchor)}
-              </select>
-            </label>
-          </div>
+          ${
+            isHypothesis
+              ? `<input type="hidden" name="mode" value="free" />`
+              : `
+                <div class="filters-grid persona-chat-controls">
+                  <label>
+                    Modo
+                    <select name="mode">
+                      <option value="free" ${selectedMode === "free" ? "selected" : ""}>Conversar con la persona</option>
+                      <option value="evidence" ${selectedMode === "evidence" ? "selected" : ""}>Preguntar sobre evidencia</option>
+                    </select>
+                  </label>
+                  <label>
+                    Run de referencia
+                    <select name="anchorRunId">
+                      ${renderAnchorOptions(runs, selectedAnchor)}
+                    </select>
+                  </label>
+                </div>
+              `
+          }
           <label>
-            Mensaje
-            <textarea name="content" rows="3" placeholder="Pregúntale qué piensa, qué espera o qué le incomoda..." ${ui.personaChatBusy ? "disabled" : ""} required></textarea>
+            ${isHypothesis ? "Hipótesis" : "Mensaje"}
+            <textarea name="content" rows="3" placeholder="${
+              isHypothesis
+                ? "Plantea una hipótesis concreta. Ej: ¿Comprarías esto a $40 al mes?, ¿Usarías esta feature si te ahorra 15 min por día?"
+                : "Pregúntale qué piensa, qué espera o qué le incomoda..."
+            }" ${ui.personaChatBusy ? "disabled" : ""} required></textarea>
           </label>
           <div class="form-actions">
-            <button type="submit" ${ui.personaChatBusy ? "disabled" : ""}>${ui.personaChatBusy ? "Respondiendo..." : "Enviar"}</button>
+            <button type="submit" ${ui.personaChatBusy ? "disabled" : ""}>${
+              ui.personaChatBusy
+                ? isHypothesis
+                  ? "Evaluando..."
+                  : "Respondiendo..."
+                : isHypothesis
+                  ? "Evaluar hipótesis"
+                  : "Enviar"
+            }</button>
           </div>
         </form>
       </div>
@@ -563,11 +640,10 @@ export function renderPersonaDetail() {
     return;
   }
 
-  const project = getProjectById(ui.selectedProjectId, state);
   const persona = getPersonaById(ui.personaDetailId, state);
 
-  if (!project || !persona || persona.project_id !== project.id) {
-    container.innerHTML = emptyStateMarkup("Selecciona una persona del proyecto activo para ver su ficha completa.");
+  if (!persona) {
+    container.innerHTML = emptyStateMarkup("Selecciona una persona para ver su ficha completa.");
     return;
   }
 
@@ -575,8 +651,9 @@ export function renderPersonaDetail() {
   const runs = (state.runs || [])
     .filter((run) => run.persona_id === persona.id)
     .sort((a, b) => new Date(b.started_at || 0) - new Date(a.started_at || 0));
-  const projectPersonas = (state.personas || []).filter((entry) => entry.project_id === project.id);
-  const projectRuns = (state.runs || []).filter((run) => run.project_id === project.id);
+  // Comparativas globales: usamos todas las personas activas del pool.
+  const projectPersonas = (state.personas || []).filter((p) => p.status !== "archived");
+  const projectRuns = state.runs || [];
   const conversations = (state.persona_conversations || [])
     .filter((thread) => thread.persona_id === persona.id)
     .sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0));
@@ -598,156 +675,179 @@ export function renderPersonaDetail() {
   const totalSteps = runs.reduce((sum, run) => sum + (run.step_log?.length || 0), 0);
   const lastRun = runs[0];
 
+  const activeTab = ui.personaDetailTab || "perfil";
+  const tabs = [
+    { id: "perfil", label: "Perfil" },
+    { id: "tareas", label: "Tareas" },
+    { id: "actividad", label: "Actividad" }
+  ];
+
+  const tabsHtml = `
+    <div class="persona-detail-tabs" role="tablist">
+      ${tabs
+        .map(
+          (tab) => `
+            <button type="button" class="pill-button${tab.id === activeTab ? " is-active" : ""}" role="tab" data-persona-tab="${tab.id}" aria-selected="${tab.id === activeTab}">${escapeHtml(tab.label)}</button>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+
+  const perfilPanel = `
+    <div class="metrics-grid">
+      ${metricCard("Tasks asociadas", String(tasks.length), "Tareas definidas para este arquetipo")}
+      ${metricCard("Runs", String(runs.length), "Corridas registradas para esta persona")}
+      ${metricCard("Completion rate", `${personaStats.successRate}%`, "Corridas completadas sobre el total")}
+      ${metricCard("Ultima actividad", lastRun ? formatShortDate(lastRun.started_at) : "N/A", "Fecha del run más reciente")}
+      ${metricCard("Pasos observados", String(totalSteps), "Suma de pasos registrados en runs")}
+    </div>
+
+    <div class="panel-grid persona-detail-top-grid">
+      <article class="panel">
+        <div class="panel-header">
+          <div>
+            <p class="eyebrow">Perfil</p>
+            <h3>Contexto operativo</h3>
+          </div>
+        </div>
+        <dl class="definition-grid">
+          ${definitionItem("Contexto funcional", persona.functional_context)}
+          ${definitionItem("Contexto de uso", persona.usage_context)}
+          ${definitionItem("Metas", persona.goals)}
+          ${definitionItem("Motivaciones", persona.motivations)}
+          ${definitionItem("Necesidades", persona.needs)}
+          ${definitionItem("Comportamientos", persona.behaviors)}
+        </dl>
+      </article>
+
+      <article class="panel">
+        <div class="panel-header">
+          <div>
+            <p class="eyebrow">Limitantes</p>
+            <h3>Riesgos y herramientas</h3>
+          </div>
+        </div>
+        <dl class="definition-grid">
+          ${definitionItem("Dolores", persona.pains)}
+          ${definitionItem("Frenos", persona.frictions)}
+          ${definitionItem("Rasgos", persona.personality_traits)}
+          ${definitionItem("Entorno digital", persona.digital_environment)}
+          ${definitionItem("Comportamiento digital", persona.digital_behavior)}
+          ${definitionItem("Dispositivos", persona.devices)}
+          ${definitionItem("Apps usadas", persona.apps_used)}
+          ${definitionItem("Restricciones", persona.restrictions)}
+          ${definitionItem("Adjuntos", persona.attachments)}
+        </dl>
+      </article>
+    </div>
+
+    <article class="panel">
+      <div class="panel-header">
+        <div>
+          <p class="eyebrow">Metadata</p>
+          <h3>Versionado y contexto</h3>
+        </div>
+      </div>
+      <dl class="definition-grid">
+        ${definitionItem("Creada", formatShortDate(persona.created_at))}
+        ${definitionItem("Actualizada", formatShortDate(persona.updated_at))}
+        ${definitionItem("Estado", persona.status)}
+        ${definitionItem("Nivel digital", labelDigitalLevel(persona.digital_level))}
+      </dl>
+    </article>
+  `;
+
+  const tareasPanel = `
+    <article class="panel">
+      <div class="panel-header">
+        <div>
+          <p class="eyebrow">Tareas asignadas</p>
+          <h3>Todo lo que tiene asignado</h3>
+        </div>
+      </div>
+      <div class="stacked-list">${renderTasks(tasks)}</div>
+    </article>
+  `;
+
+  const actividadPanel = `
+    <div class="panel-grid persona-detail-activity-grid">
+      <article class="panel">
+        <div class="panel-header">
+          <div>
+            <p class="eyebrow">Observed</p>
+            <h3>Rutas que navegó</h3>
+          </div>
+        </div>
+        <div class="stacked-list">${renderRoutes(runs)}</div>
+      </article>
+
+      <article class="panel">
+        <div class="panel-header">
+          <div>
+            <p class="eyebrow">Inferred</p>
+            <h3>Hallazgos frecuentes</h3>
+          </div>
+        </div>
+        <div class="stacked-list">${renderFindings(runs)}</div>
+      </article>
+    </div>
+
+    <article class="panel">
+      <div class="panel-header">
+        <div>
+          <p class="eyebrow">Ranking</p>
+          <h3>Arquetipos comparados</h3>
+        </div>
+      </div>
+      <div class="stacked-list">${renderRankingPanel(projectPersonas, projectRuns, persona.id)}</div>
+    </article>
+
+    <article class="panel">
+      <div class="panel-header">
+        <div>
+          <p class="eyebrow">Historial</p>
+          <h3>Todo lo que hizo y navegó</h3>
+        </div>
+      </div>
+      <div class="persona-run-list">${renderRunHistory(runs)}</div>
+    </article>
+  `;
+
+  const tabPanel =
+    activeTab === "tareas" ? tareasPanel : activeTab === "actividad" ? actividadPanel : perfilPanel;
+
+  const avatarColor = heroAvatarColor(persona.name || "?");
+  const avatarInitials = heroInitials(persona.name);
+
   container.innerHTML = `
     <div class="persona-detail-shell">
       <div class="hero-card persona-detail-hero">
-        <div>
-          <p class="eyebrow">Ficha de persona</p>
-          <h3>${escapeHtml(persona.name)}</h3>
-          <p>${escapeHtml(persona.description || persona.usage_context || "Sin descripcion")}</p>
-          <div class="meta-row">
-            <span class="tag">${escapeHtml(persona.status || "active")}</span>
-            <span class="pill">${escapeHtml(persona.segment || "Sin segmento")}</span>
-            <span class="pill">${escapeHtml(persona.role || "Sin rol")}</span>
-            <span class="pill">${labelDigitalLevel(persona.digital_level)}</span>
-            <span class="pill">v${persona.version || 1}</span>
+        <div class="persona-detail-hero__main">
+          <div class="persona-detail-hero__avatar" style="background:${avatarColor}">${avatarInitials}</div>
+          <div class="persona-detail-hero__body">
+            <p class="eyebrow">Ficha de persona</p>
+            <h3>${escapeHtml(persona.name)}</h3>
+            <p>${escapeHtml(persona.description || persona.usage_context || "Sin descripcion")}</p>
+            <div class="meta-row">
+              <span class="tag">${escapeHtml(persona.status || "active")}</span>
+              <span class="pill">${escapeHtml(persona.segment || "Sin segmento")}</span>
+              <span class="pill">${escapeHtml(persona.role || "Sin rol")}</span>
+              <span class="pill">${labelDigitalLevel(persona.digital_level)}</span>
+              <span class="pill">v${persona.version || 1}</span>
+            </div>
           </div>
         </div>
         <div class="persona-detail-actions">
           <button type="button" class="ghost-button" data-persona-detail-action="back">Volver a personas</button>
           <button type="button" class="ghost-button" data-action="open-chat" data-persona-id="${persona.id}">Conversar</button>
+          <button type="button" class="ghost-button" data-action="open-hypothesis" data-persona-id="${persona.id}">Validar hipótesis</button>
           <button type="button" data-persona-detail-action="edit" data-id="${persona.id}">Editar persona</button>
         </div>
       </div>
 
-      <div class="metrics-grid">
-        ${metricCard("Tasks asociadas", String(tasks.length), "Tareas definidas para este arquetipo")}
-        ${metricCard("Runs", String(runs.length), "Corridas registradas para esta persona")}
-        ${metricCard("Completion rate", `${personaStats.successRate}%`, "Corridas completadas sobre el total")}
-        ${metricCard("Ultima actividad", lastRun ? formatShortDate(lastRun.started_at) : "N/A", "Fecha del run más reciente")}
-        ${metricCard("Pasos observados", String(totalSteps), "Suma de pasos registrados en runs")}
-      </div>
-
-      <div class="panel-grid persona-detail-activity-grid">
-        <article class="panel">
-          <div class="panel-header">
-            <div>
-              <p class="eyebrow">Comparativa</p>
-              <h3>Cómo rinde frente al proyecto</h3>
-            </div>
-          </div>
-          ${renderComparisonPanel(personaStats, peerStats, peerStatsSource.length)}
-        </article>
-
-        <article class="panel">
-          <div class="panel-header">
-            <div>
-              <p class="eyebrow">Ranking</p>
-              <h3>Arquetipos comparados</h3>
-            </div>
-          </div>
-          <div class="stacked-list">${renderRankingPanel(projectPersonas, projectRuns, persona.id)}</div>
-        </article>
-      </div>
-
-      <div class="panel-grid persona-detail-top-grid">
-        <article class="panel">
-          <div class="panel-header">
-            <div>
-              <p class="eyebrow">Perfil</p>
-              <h3>Contexto operativo</h3>
-            </div>
-          </div>
-          <dl class="definition-grid">
-            ${definitionItem("Contexto funcional", persona.functional_context)}
-            ${definitionItem("Contexto de uso", persona.usage_context)}
-            ${definitionItem("Metas", persona.goals)}
-            ${definitionItem("Motivaciones", persona.motivations)}
-            ${definitionItem("Necesidades", persona.needs)}
-            ${definitionItem("Comportamientos", persona.behaviors)}
-          </dl>
-        </article>
-
-        <article class="panel">
-          <div class="panel-header">
-            <div>
-              <p class="eyebrow">Limitantes</p>
-              <h3>Riesgos y herramientas</h3>
-            </div>
-          </div>
-          <dl class="definition-grid">
-            ${definitionItem("Dolores", persona.pains)}
-            ${definitionItem("Frenos", persona.frictions)}
-            ${definitionItem("Rasgos", persona.personality_traits)}
-            ${definitionItem("Entorno digital", persona.digital_environment)}
-            ${definitionItem("Comportamiento digital", persona.digital_behavior)}
-            ${definitionItem("Dispositivos", persona.devices)}
-            ${definitionItem("Apps usadas", persona.apps_used)}
-            ${definitionItem("Restricciones", persona.restrictions)}
-            ${definitionItem("Adjuntos", persona.attachments)}
-          </dl>
-        </article>
-      </div>
-
-      <div class="panel-grid persona-detail-activity-grid">
-        <article class="panel">
-          <div class="panel-header">
-            <div>
-              <p class="eyebrow">Tasks</p>
-              <h3>Todo lo que tiene asignado</h3>
-            </div>
-          </div>
-          <div class="stacked-list">${renderTasks(tasks)}</div>
-        </article>
-
-        <article class="panel">
-          <div class="panel-header">
-            <div>
-              <p class="eyebrow">Observed</p>
-              <h3>Rutas que navegó</h3>
-            </div>
-          </div>
-          <div class="stacked-list">${renderRoutes(runs)}</div>
-        </article>
-      </div>
-
-      <div class="panel-grid persona-detail-activity-grid">
-        <article class="panel">
-          <div class="panel-header">
-            <div>
-              <p class="eyebrow">Inferred</p>
-              <h3>Hallazgos frecuentes</h3>
-            </div>
-          </div>
-          <div class="stacked-list">${renderFindings(runs)}</div>
-        </article>
-
-        <article class="panel">
-          <div class="panel-header">
-            <div>
-              <p class="eyebrow">Metadata</p>
-              <h3>Versionado y contexto</h3>
-            </div>
-          </div>
-          <dl class="definition-grid">
-            ${definitionItem("Proyecto", project.name)}
-            ${definitionItem("Creada", formatShortDate(persona.created_at))}
-            ${definitionItem("Actualizada", formatShortDate(persona.updated_at))}
-            ${definitionItem("Estado", persona.status)}
-            ${definitionItem("Nivel digital", labelDigitalLevel(persona.digital_level))}
-          </dl>
-        </article>
-      </div>
-
-      <article class="panel">
-        <div class="panel-header">
-          <div>
-            <p class="eyebrow">Historial</p>
-            <h3>Todo lo que hizo y navegó</h3>
-          </div>
-        </div>
-        <div class="persona-run-list">${renderRunHistory(runs)}</div>
-      </article>
+      ${tabsHtml}
+      <div class="persona-detail-tab-panel">${tabPanel}</div>
     </div>
   `;
 }

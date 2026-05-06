@@ -175,10 +175,11 @@ export function createRouteHandler(deps) {
         const payload = await readJson(req);
         const state = await readState();
         const now = new Date().toISOString();
+        // Personas son top-level: ignoramos project_id si llega del cliente.
+        const { project_id: _ignored, ...rest } = payload || {};
         state.personas.unshift({
           id: uid("persona"),
-          ...payload,
-          project_id: payload.project_id,
+          ...rest,
           status: "active",
           version: 1,
           created_at: now,
@@ -247,15 +248,15 @@ export function createRouteHandler(deps) {
       if (projectMatch && req.method === "DELETE") {
         const state = await readState();
         const projectId = projectMatch[1];
+        // Las personas son top-level: sobreviven al borrado del proyecto.
+        // Cascada: tasks, runs, calibrations y conversations cuyo project_id matchee.
         const taskIds = state.tasks.filter((item) => item.project_id === projectId).map((item) => item.id);
-        const personaIds = state.personas.filter((item) => item.project_id === projectId).map((item) => item.id);
         state.projects = state.projects.filter((item) => item.id !== projectId);
-        state.personas = state.personas.filter((item) => item.project_id !== projectId);
         state.tasks = state.tasks.filter((item) => item.project_id !== projectId);
         state.calibrations = state.calibrations.filter((item) => item.project_id !== projectId);
         state.persona_conversations = (state.persona_conversations || []).filter((item) => item.project_id !== projectId);
         state.runs = state.runs.filter(
-          (item) => item.project_id !== projectId && !taskIds.includes(item.task_id) && !personaIds.includes(item.persona_id)
+          (item) => item.project_id !== projectId && !taskIds.includes(item.task_id)
         );
         await writeState(state);
         return sendJson(res, 200, { state });
@@ -287,11 +288,13 @@ export function createRouteHandler(deps) {
         }
         const payload = await readJson(req);
         const now = new Date().toISOString();
+        const kind = payload.kind === "hypothesis" ? "hypothesis" : "chat";
         const conversation = {
           id: uid("thread"),
-          project_id: persona.project_id,
+          project_id: payload.project_id || null,
           persona_id: persona.id,
-          title: payload.title || "Chat principal",
+          kind,
+          title: payload.title || (kind === "hypothesis" ? "Hipótesis sin título" : "Chat principal"),
           mode: payload.mode === "evidence" ? "evidence" : "free",
           anchor_run_id: payload.anchorRunId || null,
           messages: [],
@@ -319,7 +322,7 @@ export function createRouteHandler(deps) {
         }
         const mode = payload.mode === "evidence" ? "evidence" : thread.mode || "free";
         const anchorRunId = payload.anchorRunId || thread.anchor_run_id || null;
-        const project = state.projects.find((item) => item.id === persona.project_id) || null;
+        const project = thread.project_id ? state.projects.find((item) => item.id === thread.project_id) || null : null;
         const tasks = state.tasks.filter((item) => item.persona_id === persona.id);
         const runs = state.runs.filter((item) => item.persona_id === persona.id);
         const now = new Date().toISOString();
@@ -337,7 +340,8 @@ export function createRouteHandler(deps) {
           thread,
           message: content,
           mode,
-          anchorRunId
+          anchorRunId,
+          kind: thread.kind || "chat"
         });
         const personaMessage = {
           id: uid("msg"),
@@ -346,14 +350,25 @@ export function createRouteHandler(deps) {
           evidence_mode: reply.evidence_mode,
           reasoning_note: reply.reasoning_note,
           citations: reply.citations,
+          verdict: reply.verdict || null,
+          verdict_reason: reply.verdict_reason || null,
+          conditions: reply.conditions || null,
+          frictions: reply.frictions || null,
           created_at: new Date().toISOString()
         };
+        // Auto-titular hipótesis con la primera pregunta del usuario.
+        const isFirstMessage = (thread.messages || []).length === 0;
+        const newTitle =
+          thread.kind === "hypothesis" && isFirstMessage
+            ? content.slice(0, 70)
+            : thread.title;
         state.persona_conversations = (state.persona_conversations || []).map((item) =>
           item.id === thread.id
             ? {
                 ...item,
                 mode,
                 anchor_run_id: anchorRunId,
+                title: newTitle,
                 messages: [...item.messages, userMessage, personaMessage],
                 updated_at: personaMessage.created_at
               }

@@ -73,7 +73,8 @@ export function getRunById(id, state) {
 }
 
 export function requiresProject(section) {
-  return ["personas", "persona-detail", "tasks", "runs", "calibration"].includes(section);
+  // Personas son top-level: ya no requieren proyecto seleccionado.
+  return ["tasks", "runs", "calibration"].includes(section);
 }
 
 export function mostActiveProjectLabel(state) {

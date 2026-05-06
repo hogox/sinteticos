@@ -91,10 +91,12 @@ export function migrateState(state) {
   const taskProjectMap = new Map(next.tasks.map((item) => [item.id, item.project_id || fallbackProjectId]));
   const personaProjectMap = new Map(next.personas.map((item) => [item.id, item.project_id || fallbackProjectId]));
 
+  // Personas son top-level: si vienen con project_id legacy, lo eliminamos.
   next.personas = next.personas.map((item) => {
-    if (item.project_id) return item;
+    if (!("project_id" in item)) return item;
     changed = true;
-    return { ...item, project_id: fallbackProjectId };
+    const { project_id, ...rest } = item;
+    return rest;
   });
 
   next.tasks = next.tasks.map((item) => {
@@ -127,10 +129,13 @@ export function migrateState(state) {
     };
   });
 
+  // project_id ahora es opcional (chats sueltos para validar hipótesis).
   next.persona_conversations = next.persona_conversations
-    .filter((item) => item && item.persona_id && item.project_id)
+    .filter((item) => item && item.persona_id)
     .map((item) => ({
       ...item,
+      project_id: item.project_id || null,
+      kind: item.kind === "hypothesis" ? "hypothesis" : "chat",
       mode: item.mode === "evidence" ? "evidence" : "free",
       anchor_run_id: item.anchor_run_id || null,
       messages: Array.isArray(item.messages) ? item.messages : [],
