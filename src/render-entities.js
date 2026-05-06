@@ -14,6 +14,14 @@ import {
 import { fillSelect, toggleFormDisabled, resetProjectForm, resetPersonaForm, resetTaskForm } from "./forms.js";
 import { observedDetailHtml, inferredDetailHtml, predictiveDetailHtml, drawRunObserved, drawPredictiveCanvas, skillAnalysisHtml, skillBatchHtml } from "./render-detail.js";
 
+const PROJECT_COLORS = ["#2563eb", "#7c3aed", "#0891b2", "#059669", "#d97706", "#dc2626", "#db2777", "#65a30d"];
+
+function projectColor(name) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) & 0xffffffff;
+  return PROJECT_COLORS[Math.abs(hash) % PROJECT_COLORS.length];
+}
+
 export function renderProjects() {
   const state = getState();
   const ui = getUi();
@@ -25,21 +33,26 @@ export function renderProjects() {
       const personaCount = (state.personas || []).filter((item) => item.project_id === project.id).length;
       const taskCount = (state.tasks || []).filter((item) => item.project_id === project.id).length;
       const runCount = (state.runs || []).filter((item) => item.project_id === project.id).length;
+      const initials = project.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+      const color = projectColor(project.name);
       return `
-        <article class="list-card${selected}" data-project-id="${project.id}">
-          <header>
-            <div>
-              <strong>${escapeHtml(project.name)}</strong>
-              <p>${escapeHtml(project.description || "Sin descripcion")}</p>
+        <article class="project-card${selected}" data-project-id="${project.id}">
+          <div class="project-card__top">
+            <div class="project-card__avatar" style="background:${color}">${initials}</div>
+            <div class="project-card__info">
+              <p class="project-card__name">${escapeHtml(project.name)}</p>
+              <p class="project-card__date">${formatShortDate(project.created_at)}</p>
             </div>
-            <span class="tag">${formatShortDate(project.created_at)}</span>
-          </header>
-          <div class="meta-row">
+          </div>
+          <div class="project-card__body">
+            <p class="project-card__desc">${escapeHtml((project.description || "Sin descripcion").slice(0, 90))}</p>
+          </div>
+          <div class="project-card__meta">
             <span class="pill">${personaCount} personas</span>
             <span class="pill">${taskCount} tasks</span>
             <span class="pill">${runCount} runs</span>
           </div>
-          <div class="action-row">
+          <div class="project-card__actions">
             <button class="ghost-button" data-project-action="select" data-id="${project.id}">
               ${project.id === ui.selectedProjectId ? "Abrir dashboard" : "Seleccionar"}
             </button>

@@ -31,6 +31,7 @@ import {
   bindPersonaUploadEvents
 } from "./persona-modes.js";
 import { openPersonaModal, closePersonaModal } from "./persona-modal.js";
+import { openProjectModal, closeProjectModal } from "./project-modal.js";
 
 export function bindEvents() {
   document.addEventListener("click", onClick);
@@ -41,6 +42,11 @@ export function bindEvents() {
   document.getElementById("task-form").addEventListener("submit", onTaskSubmit);
   document.getElementById("run-form").addEventListener("submit", onRunSubmit);
   document.getElementById("calibration-form").addEventListener("submit", onCalibrationSubmit);
+  document.getElementById("create-project-btn").addEventListener("click", openProjectModal);
+  document.getElementById("project-modal-close").addEventListener("click", closeProjectModal);
+  document.getElementById("project-modal").addEventListener("click", (event) => {
+    if (event.target.id === "project-modal") closeProjectModal();
+  });
   document.getElementById("project-reset").addEventListener("click", resetProjectForm);
   document.getElementById("create-persona-btn").addEventListener("click", openPersonaModal);
   document.getElementById("persona-modal-close").addEventListener("click", closePersonaModal);
@@ -72,6 +78,8 @@ export function bindEvents() {
     const ui = getUi();
     if (event.key === "Escape") {
       if (ui.chatDrawer?.open) { closeChatDrawer(); return; }
+      const projectModal = document.getElementById("project-modal");
+      if (projectModal && !projectModal.classList.contains("hidden")) { closeProjectModal(); return; }
       const personaModal = document.getElementById("persona-modal");
       if (personaModal && !personaModal.classList.contains("hidden")) { closePersonaModal(); return; }
       if (ui.confirmation) closeConfirmation(false);

@@ -35,6 +35,8 @@ export async function onProjectSubmit(event) {
   }
 
   ui.editingProjectId = null;
+  const { closeProjectModal } = await import("./project-modal.js");
+  closeProjectModal();
   ensureSelection();
   render();
   event.currentTarget.reset();
@@ -275,7 +277,9 @@ export async function handleProjectAction(action, id) {
 
   if (action === "edit") {
     ui.editingProjectId = id;
+    const { openProjectModal } = await import("./project-modal.js");
     fillProjectForm(project);
+    openProjectModal();
     return;
   }
 

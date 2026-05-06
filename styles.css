@@ -1523,6 +1523,157 @@ blockquote {
   background: var(--primary-deep);
 }
 
+/* Project cards grid */
+.project-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1rem;
+}
+
+.project-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1.1rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  transition: box-shadow 120ms ease, transform 120ms ease, border-color 120ms ease;
+  cursor: pointer;
+}
+
+.project-card:hover {
+  border-color: #bfdbfe;
+  box-shadow: 0 2px 4px rgba(15,23,42,.05), 0 8px 28px rgba(37,99,235,.1);
+  transform: translateY(-2px);
+}
+
+.project-card.is-selected {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.project-card__top {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.project-card__avatar {
+  display: grid;
+  place-items: center;
+  width: 2.8rem;
+  height: 2.8rem;
+  border-radius: 50%;
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: #fff;
+  flex-shrink: 0;
+  letter-spacing: -0.02em;
+}
+
+.project-card__info {
+  flex: 1;
+  min-width: 0;
+}
+
+.project-card__name {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.95rem;
+  font-weight: 750;
+  line-height: 1.3;
+}
+
+.project-card__date {
+  margin: 0.2rem 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.project-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.project-card__desc {
+  margin: 0;
+  color: var(--muted-strong);
+  font-size: 0.86rem;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.project-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.project-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: auto;
+  padding-top: 0.25rem;
+  border-top: 1px solid var(--line-soft);
+}
+
+.project-card__actions button {
+  min-height: 30px;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.78rem;
+}
+
+/* Project create/edit modal */
+.project-form-modal {
+  width: min(100%, 52rem);
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 1.4rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 28px 70px rgba(15,23,42,.22);
+}
+
+.project-form-modal__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 1rem;
+  margin-bottom: 1.1rem;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.project-form-modal__close {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  min-height: unset;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--surface-muted);
+  color: var(--muted-strong);
+  border-color: var(--line);
+  box-shadow: none;
+  font-size: 1.1rem;
+  font-weight: 400;
+  flex-shrink: 0;
+}
+
+.project-form-modal__close:hover {
+  background: var(--line);
+  transform: none;
+}
+
 body.modal-open {
   overflow: hidden;
 }
