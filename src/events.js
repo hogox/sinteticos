@@ -13,6 +13,7 @@ import {
 } from "./handlers.js";
 import { getUi, getState, setSkillsCache, getSkillsCache } from "./store.js";
 import { render } from "./render.js";
+import { renderChatDrawer } from "./render-chat-drawer.js";
 import { renderRuns, renderTasks } from "./render-entities.js";
 import { api } from "./api.js";
 import { renderDashboard } from "./render-dashboard.js";
@@ -29,6 +30,7 @@ import {
   bindPersonaPreviewEvents,
   bindPersonaUploadEvents
 } from "./persona-modes.js";
+import { openPersonaModal, closePersonaModal } from "./persona-modal.js";
 
 export function bindEvents() {
   document.addEventListener("click", onClick);
@@ -40,6 +42,11 @@ export function bindEvents() {
   document.getElementById("run-form").addEventListener("submit", onRunSubmit);
   document.getElementById("calibration-form").addEventListener("submit", onCalibrationSubmit);
   document.getElementById("project-reset").addEventListener("click", resetProjectForm);
+  document.getElementById("create-persona-btn").addEventListener("click", openPersonaModal);
+  document.getElementById("persona-modal-close").addEventListener("click", closePersonaModal);
+  document.getElementById("persona-modal").addEventListener("click", (event) => {
+    if (event.target.id === "persona-modal") closePersonaModal();
+  });
   document.getElementById("persona-reset").addEventListener("click", resetPersonaForm);
   document.getElementById("persona-simple-form").addEventListener("submit", onPersonaSimpleSubmit);
   document.getElementById("persona-upload-form").addEventListener("submit", onPersonaUploadSubmit);
@@ -50,6 +57,7 @@ export function bindEvents() {
   document.getElementById("task-reset").addEventListener("click", resetTaskForm);
   document.getElementById("seed-demo").addEventListener("click", resetDemoData);
   document.getElementById("export-state").addEventListener("click", exportState);
+  document.getElementById("chat-drawer-close").addEventListener("click", closeChatDrawer);
   document.getElementById("dashboard-filters").addEventListener("change", onFilterChange);
   document.getElementById("confirm-modal-cancel").addEventListener("click", () => closeConfirmation(false));
   document.getElementById("confirm-modal-confirm").addEventListener("click", () => closeConfirmation(true));
@@ -63,10 +71,25 @@ export function bindEvents() {
   window.addEventListener("keydown", (event) => {
     const ui = getUi();
     if (event.key === "Escape") {
+      if (ui.chatDrawer?.open) { closeChatDrawer(); return; }
+      const personaModal = document.getElementById("persona-modal");
+      if (personaModal && !personaModal.classList.contains("hidden")) { closePersonaModal(); return; }
       if (ui.confirmation) closeConfirmation(false);
       else closeErrorModal();
     }
   });
+}
+
+function openChatDrawer(personaId) {
+  const ui = getUi();
+  ui.chatDrawer = { open: true, personaId, conversationId: null };
+  renderChatDrawer();
+}
+
+function closeChatDrawer() {
+  const ui = getUi();
+  ui.chatDrawer = { ...ui.chatDrawer, open: false };
+  renderChatDrawer();
 }
 
 function onDynamicSubmit(event) {
@@ -141,6 +164,12 @@ function handleLighthouseToggleView() {
 
 export function onClick(event) {
   const ui = getUi();
+
+  const openChatBtn = event.target.closest("[data-action='open-chat']");
+  if (openChatBtn) {
+    openChatDrawer(openChatBtn.dataset.personaId);
+    return;
+  }
 
   const lhAction = event.target.closest("[data-lighthouse-action]");
   if (lhAction) {

@@ -521,18 +521,21 @@ function handlePreviewToggle(id, accepted) {
   }
 }
 
-function handlePreviewEdit(id) {
+async function handlePreviewEdit(id) {
   const ui = getUi();
   if (!ui.personaPreview) return;
   const item = ui.personaPreview.items.find((it) => it.id === id);
   if (!item) return;
   setPersonaCreateMode("advanced");
   fillPersonaForm(item.persona);
-  document.getElementById("persona-form-title").textContent = `Crear persona desde propuesta IA`;
+  const titleEl = document.getElementById("persona-form-title");
+  if (titleEl) titleEl.textContent = "Crear persona desde propuesta IA";
   ui.editingPersonaId = null;
   item.accepted = false;
   renderPersonaPreview();
   closePersonaPreview();
+  const { openPersonaModal } = await import("./persona-modal.js");
+  openPersonaModal();
 }
 
 async function confirmPersonaPreview() {

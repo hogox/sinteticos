@@ -392,7 +392,7 @@ function renderMessages(thread) {
     .join("");
 }
 
-function renderPersonaChat({ conversations, selectedThread, runs, ui }) {
+export function renderPersonaChat({ conversations, selectedThread, runs, ui }) {
   const selectedMode = selectedThread?.mode || ui.personaChatMode || "free";
   const selectedAnchor = selectedThread?.anchor_run_id || ui.personaChatAnchorRunId || "";
   return `
@@ -602,6 +602,7 @@ export function renderPersonaDetail() {
         </div>
         <div class="persona-detail-actions">
           <button type="button" class="ghost-button" data-persona-detail-action="back">Volver a personas</button>
+          <button type="button" class="ghost-button" data-action="open-chat" data-persona-id="${persona.id}">Conversar</button>
           <button type="button" data-persona-detail-action="edit" data-id="${persona.id}">Editar persona</button>
         </div>
       </div>
@@ -613,8 +614,6 @@ export function renderPersonaDetail() {
         ${metricCard("Ultima actividad", lastRun ? formatShortDate(lastRun.started_at) : "N/A", "Fecha del run más reciente")}
         ${metricCard("Pasos observados", String(totalSteps), "Suma de pasos registrados en runs")}
       </div>
-
-      ${renderPersonaChat({ conversations, selectedThread, runs, ui })}
 
       <div class="panel-grid persona-detail-activity-grid">
         <article class="panel">

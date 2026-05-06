@@ -57,6 +57,14 @@ export function renderProjects() {
   }
 }
 
+const AVATAR_COLORS = ["#2563eb", "#7c3aed", "#0891b2", "#059669", "#d97706", "#dc2626", "#db2777", "#65a30d"];
+
+function avatarColor(name) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) & 0xffffffff;
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
 export function renderPersonas() {
   const state = getState();
   const ui = getUi();
@@ -67,22 +75,26 @@ export function renderPersonas() {
     .map((persona) => {
       const selected = persona.id === ui.selectedPersonaId ? " is-selected" : "";
       const runCount = state.runs.filter((run) => run.persona_id === persona.id).length;
+      const initials = persona.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+      const color = avatarColor(persona.name);
       return `
-        <article class="list-card list-card--interactive${selected}" data-persona-id="${persona.id}" role="button" tabindex="0" aria-label="Abrir ficha de ${escapeHtml(persona.name)}">
-          <header>
-            <div>
-              <strong>${escapeHtml(persona.name)}</strong>
-              <p>${escapeHtml(persona.segment)} · ${escapeHtml(persona.role)}</p>
-            </div>
+        <article class="persona-card${selected}" data-persona-id="${persona.id}" role="button" tabindex="0" aria-label="Abrir ficha de ${escapeHtml(persona.name)}">
+          <div class="persona-card__top">
+            <div class="persona-card__avatar" style="background:${color}">${initials}</div>
             <span class="tag">${persona.status}</span>
-          </header>
-          <p>${escapeHtml(persona.description || persona.usage_context || "Sin descripcion")}</p>
-          <div class="meta-row">
+          </div>
+          <div class="persona-card__body">
+            <p class="persona-card__name">${escapeHtml(persona.name)}</p>
+            <p class="persona-card__role">${escapeHtml(persona.segment)} · ${escapeHtml(persona.role)}</p>
+            <p class="persona-card__desc">${escapeHtml((persona.description || persona.usage_context || "Sin descripcion").slice(0, 90))}</p>
+          </div>
+          <div class="persona-card__meta">
             <span class="pill">v${persona.version}</span>
             <span class="pill">${labelDigitalLevel(persona.digital_level)}</span>
             <span class="pill">${runCount} runs</span>
           </div>
-          <div class="action-row">
+          <div class="persona-card__actions">
+            <button class="ghost-button" data-action="open-chat" data-persona-id="${persona.id}">Conversar</button>
             <button class="ghost-button" data-persona-action="edit" data-id="${persona.id}">Editar</button>
             <button class="ghost-button" data-persona-action="duplicate" data-id="${persona.id}">Duplicar</button>
             <button class="ghost-button" data-persona-action="archive" data-id="${persona.id}">${persona.status === "archived" ? "Activar" : "Archivar"}</button>

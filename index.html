@@ -3,47 +3,62 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light" />
     <title>Sinteticos Lab</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <div class="app-shell">
       <aside class="sidebar">
-        <div class="brand">
-          <p class="eyebrow">Research Ops</p>
-          <h1>Sinteticos Lab</h1>
-          <p class="brand-copy">
-            Consola local para proyectos, personas, tareas, corridas y evidencia.
-          </p>
+        <div class="sidebar__brand">
+          <div class="sidebar__brand-icon">SL</div>
+          <div class="sidebar__brand-text">
+            <p class="sidebar__brand-name">Sinteticos Lab</p>
+            <p class="sidebar__brand-sub">Research Ops</p>
+          </div>
         </div>
 
-        <nav class="nav-tabs" aria-label="Secciones">
+        <div class="sidebar__profile">
+          <div class="sidebar__profile-avatar" id="sidebar-avatar">SL</div>
+          <div class="sidebar__profile-info">
+            <p class="sidebar__profile-name" id="sidebar-profile-name">Sinteticos Lab</p>
+            <p class="sidebar__profile-email" id="sidebar-profile-email">Local workspace</p>
+          </div>
+        </div>
+
+        <nav class="sidebar__nav" aria-label="Secciones">
           <button class="nav-tab is-active" data-section="projects" data-icon="PR">Projects</button>
-          <button class="nav-tab" data-section="personas" data-icon="PE">Personas</button>
-          <button class="nav-tab" data-section="tasks" data-icon="TA">Tasks</button>
-          <button class="nav-tab" data-section="runs" data-icon="RU">Runs</button>
-          <button class="nav-tab" data-section="calibration" data-icon="CA">Calibration</button>
-          <button class="nav-tab" data-section="policy" data-icon="PO">Policy</button>
+
+          <button class="nav-tab hidden" id="nav-dashboard-tab" data-section="dashboard" data-section-group="dashboards" data-icon="DA">Dashboard</button>
+
+          <p class="nav-group-header hidden" data-nav-group="aplicaciones">Aplicaciones</p>
+          <button class="nav-tab hidden" data-section="personas" data-section-group="aplicaciones" data-icon="PE">Personas</button>
+          <button class="nav-tab hidden" data-section="tasks" data-section-group="aplicaciones" data-icon="TA">Tasks</button>
+          <button class="nav-tab hidden" data-section="runs" data-section-group="aplicaciones" data-icon="RU">Runs</button>
+          <button class="nav-tab hidden" data-section="calibration" data-section-group="aplicaciones" data-icon="CA">Calibration</button>
+
+          <p class="nav-group-header hidden" data-nav-group="plataforma">Plataforma</p>
+          <button class="nav-tab hidden" data-section="policy" data-section-group="plataforma" data-icon="PO">Policy</button>
         </nav>
 
-        <div class="sidebar-card">
-          <p class="sidebar-title">Workspace mode</p>
-          <p class="sidebar-stat">Local-first</p>
-          <p class="sidebar-copy">
-            CRUD en <code>localStorage</code>, runs simulados, heatmaps y scanpaths locales.
-          </p>
+        <div class="sidebar__footer">
+          <button class="sidebar__util-btn" id="seed-demo">↺ Recrear demo</button>
+          <button class="sidebar__util-btn" id="export-state">↓ Exportar JSON</button>
+          <div class="sidebar__runtime">
+            <span class="sidebar__runtime-dot" id="runtime-dot"></span>
+            <span class="sidebar__runtime-label" id="runtime-label">Inicializando…</span>
+          </div>
         </div>
       </aside>
 
       <main class="main-content">
         <header class="topbar">
           <div>
-            <p class="eyebrow">Workspace</p>
+            <p class="topbar-breadcrumb" id="topbar-breadcrumb">Workspace</p>
             <h2 id="section-title">Dashboard</h2>
           </div>
           <div class="topbar-actions">
-            <button class="ghost-button" id="seed-demo">Recrear demo</button>
-            <button class="ghost-button" id="export-state">Exportar JSON</button>
+            <span class="topbar-date" id="topbar-date"></span>
           </div>
         </header>
 
@@ -231,117 +246,16 @@
         </section>
 
         <section class="section" id="section-personas" aria-label="Personas sinteticas">
-          <div class="section-grid">
-            <article class="panel">
-              <div class="panel-header">
-                <div>
-                  <p class="eyebrow">CRUD</p>
-                  <h3>Personas registradas</h3>
-                </div>
+          <article class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Usuarios sinteticos</p>
+                <h3>Personas</h3>
               </div>
-              <div class="stacked-list" id="persona-list"></div>
-            </article>
-
-            <article class="panel panel-form">
-              <div class="panel-header">
-                <div>
-                  <p class="eyebrow">Persona editor</p>
-                  <h3 id="persona-form-title">Crear persona</h3>
-                </div>
-                <div class="pill-row" id="persona-mode-toggle" role="tablist" aria-label="Modo de creación">
-                  <button type="button" class="pill-button is-active" data-persona-mode="advanced" role="tab" aria-selected="true">Avanzado</button>
-                  <button type="button" class="pill-button" data-persona-mode="simple" role="tab" aria-selected="false">Simple</button>
-                  <button type="button" class="pill-button" data-persona-mode="upload" role="tab" aria-selected="false">Upload</button>
-                </div>
-              </div>
-
-              <form id="persona-simple-form" class="persona-mode-form simple-form" hidden>
-                <p class="mode-hint">Describe a la persona en lenguaje natural. La IA expandirá todos los campos del modo avanzado.</p>
-                <label>Descripción libre<textarea name="description" rows="6" required placeholder="Ej: dueña de pyme retail de 45 años en CDMX, baja confianza digital, quiere digitalizar inventario pero le frustran las apps complicadas."></textarea></label>
-                <label class="quantity-field">Cantidad de personas a generar<input type="number" name="quantity" min="1" max="10" value="1" required /></label>
-                <div class="form-actions">
-                  <button type="submit" id="persona-simple-submit">Generar con IA</button>
-                  <button type="button" class="ghost-button" id="persona-simple-reset">Limpiar</button>
-                </div>
-              </form>
-
-              <form id="persona-upload-form" class="persona-mode-form upload-form" hidden>
-                <p class="mode-hint">Combina archivos (PDF, Excel, .txt, .md, .csv), URLs y texto pegado. La IA extraerá personas respaldadas por la evidencia. Límite: 5 MB combinados.</p>
-
-                <div class="pill-row upload-tabs" role="tablist" aria-label="Fuentes de datos">
-                  <button type="button" class="pill-button is-active" data-upload-tab="files" role="tab" aria-selected="true">Archivos</button>
-                  <button type="button" class="pill-button" data-upload-tab="urls" role="tab" aria-selected="false">URLs</button>
-                  <button type="button" class="pill-button" data-upload-tab="paste" role="tab" aria-selected="false">Pegado</button>
-                </div>
-
-                <div class="upload-section" data-upload-section="files">
-                  <label>Archivos
-                    <input type="file" name="files" accept=".txt,.md,.csv,.pdf,.xlsx,.xlsm,text/plain,text/markdown,text/csv,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple />
-                  </label>
-                  <div id="upload-file-preview" class="upload-file-preview"></div>
-                </div>
-
-                <div class="upload-section hidden" data-upload-section="urls">
-                  <label>URLs (una por línea)
-                    <textarea name="urls" rows="5" placeholder="https://example.com/articulo&#10;https://docs.google.com/..."></textarea>
-                  </label>
-                  <div class="upload-urls-actions">
-                    <button type="button" class="ghost-button" id="validate-urls-btn">Validar URLs</button>
-                    <span class="upload-urls-hint">Se hará fetch desde el server al extraer.</span>
-                  </div>
-                  <div id="upload-url-validation" class="upload-url-validation"></div>
-                </div>
-
-                <div class="upload-section hidden" data-upload-section="paste">
-                  <label>Texto pegado
-                    <textarea name="pasted_text" rows="8" placeholder="Pega aquí transcripciones, notas, datos de usuarios..."></textarea>
-                  </label>
-                </div>
-
-                <div class="upload-summary" id="upload-summary"></div>
-                <label class="quantity-field">Cantidad máxima a extraer<input type="number" name="quantity" min="1" max="20" value="3" required /></label>
-                <div class="form-actions">
-                  <button type="submit" id="persona-upload-submit">Extraer personas</button>
-                  <button type="button" class="ghost-button" id="persona-upload-reset">Limpiar</button>
-                </div>
-              </form>
-
-              <form id="persona-form" class="form-grid persona-mode-form advanced-form">
-                <input type="hidden" name="id" />
-                <label>Nombre<input name="name" required /></label>
-                <label>Descripcion<textarea name="description" rows="2"></textarea></label>
-                <label>Rol<input name="role" required /></label>
-                <label>Segmento<input name="segment" required /></label>
-                <label>Contexto funcional<textarea name="functional_context" rows="2"></textarea></label>
-                <label>Contexto de uso<textarea name="usage_context" rows="2"></textarea></label>
-                <label>Metas<textarea name="goals" rows="2"></textarea></label>
-                <label>Motivaciones<textarea name="motivations" rows="2"></textarea></label>
-                <label>Necesidades<textarea name="needs" rows="2"></textarea></label>
-                <label>Comportamientos<textarea name="behaviors" rows="2"></textarea></label>
-                <label>Dolores<textarea name="pains" rows="2"></textarea></label>
-                <label>Frenos<textarea name="frictions" rows="2"></textarea></label>
-                <label>Rasgos de personalidad<textarea name="personality_traits" rows="2"></textarea></label>
-                <label>Entorno digital<textarea name="digital_environment" rows="2"></textarea></label>
-                <label>Comportamiento digital<textarea name="digital_behavior" rows="2"></textarea></label>
-                <label>Dispositivos<input name="devices" /></label>
-                <label>
-                  Nivel digital
-                  <select name="digital_level">
-                    <option value="low">Bajo</option>
-                    <option value="medium" selected>Intermedio</option>
-                    <option value="high">Alto</option>
-                  </select>
-                </label>
-                <label>Apps usadas<textarea name="apps_used" rows="2"></textarea></label>
-                <label>Restricciones<textarea name="restrictions" rows="2"></textarea></label>
-                <label>Adjuntos<textarea name="attachments" rows="2" placeholder="URLs o notas"></textarea></label>
-                <div class="form-actions">
-                  <button type="submit">Guardar persona</button>
-                  <button type="button" class="ghost-button" id="persona-reset">Limpiar</button>
-                </div>
-              </form>
-            </article>
-          </div>
+              <button class="primary-button" id="create-persona-btn">+ Crear persona</button>
+            </div>
+            <div class="persona-cards-grid" id="persona-list"></div>
+          </article>
         </section>
 
         <section class="section" id="section-persona-detail" aria-label="Detalle de persona">
@@ -589,6 +503,123 @@
         </div>
       </div>
     </div>
+
+    <!-- Persona form modal -->
+    <div class="modal-backdrop hidden" id="persona-modal" aria-hidden="true">
+      <div class="persona-form-modal" role="dialog" aria-modal="true" aria-labelledby="persona-modal-title">
+        <div class="persona-form-modal__header">
+          <h3 id="persona-form-title">Crear persona</h3>
+          <button class="persona-form-modal__close" id="persona-modal-close" aria-label="Cerrar">×</button>
+        </div>
+
+        <div class="pill-row" id="persona-mode-toggle" role="tablist" aria-label="Modo de creación">
+          <button type="button" class="pill-button is-active" data-persona-mode="advanced" role="tab" aria-selected="true">Avanzado</button>
+          <button type="button" class="pill-button" data-persona-mode="simple" role="tab" aria-selected="false">Simple</button>
+          <button type="button" class="pill-button" data-persona-mode="upload" role="tab" aria-selected="false">Upload</button>
+        </div>
+
+        <form id="persona-simple-form" class="persona-mode-form simple-form" hidden>
+          <p class="mode-hint">Describe a la persona en lenguaje natural. La IA expandirá todos los campos del modo avanzado.</p>
+          <label>Descripción libre<textarea name="description" rows="6" required placeholder="Ej: dueña de pyme retail de 45 años en CDMX, baja confianza digital, quiere digitalizar inventario pero le frustran las apps complicadas."></textarea></label>
+          <label class="quantity-field">Cantidad de personas a generar<input type="number" name="quantity" min="1" max="10" value="1" required /></label>
+          <div class="form-actions">
+            <button type="submit" id="persona-simple-submit">Generar con IA</button>
+            <button type="button" class="ghost-button" id="persona-simple-reset">Limpiar</button>
+          </div>
+        </form>
+
+        <form id="persona-upload-form" class="persona-mode-form upload-form" hidden>
+          <p class="mode-hint">Combina archivos (PDF, Excel, .txt, .md, .csv), URLs y texto pegado. La IA extraerá personas respaldadas por la evidencia. Límite: 5 MB combinados.</p>
+
+          <div class="pill-row upload-tabs" role="tablist" aria-label="Fuentes de datos">
+            <button type="button" class="pill-button is-active" data-upload-tab="files" role="tab" aria-selected="true">Archivos</button>
+            <button type="button" class="pill-button" data-upload-tab="urls" role="tab" aria-selected="false">URLs</button>
+            <button type="button" class="pill-button" data-upload-tab="paste" role="tab" aria-selected="false">Pegado</button>
+          </div>
+
+          <div class="upload-section" data-upload-section="files">
+            <label>Archivos
+              <input type="file" name="files" accept=".txt,.md,.csv,.pdf,.xlsx,.xlsm,text/plain,text/markdown,text/csv,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple />
+            </label>
+            <div id="upload-file-preview" class="upload-file-preview"></div>
+          </div>
+
+          <div class="upload-section hidden" data-upload-section="urls">
+            <label>URLs (una por línea)
+              <textarea name="urls" rows="5" placeholder="https://example.com/articulo&#10;https://docs.google.com/..."></textarea>
+            </label>
+            <div class="upload-urls-actions">
+              <button type="button" class="ghost-button" id="validate-urls-btn">Validar URLs</button>
+              <span class="upload-urls-hint">Se hará fetch desde el server al extraer.</span>
+            </div>
+            <div id="upload-url-validation" class="upload-url-validation"></div>
+          </div>
+
+          <div class="upload-section hidden" data-upload-section="paste">
+            <label>Texto pegado
+              <textarea name="pasted_text" rows="8" placeholder="Pega aquí transcripciones, notas, datos de usuarios..."></textarea>
+            </label>
+          </div>
+
+          <div class="upload-summary" id="upload-summary"></div>
+          <label class="quantity-field">Cantidad máxima a extraer<input type="number" name="quantity" min="1" max="20" value="3" required /></label>
+          <div class="form-actions">
+            <button type="submit" id="persona-upload-submit">Extraer personas</button>
+            <button type="button" class="ghost-button" id="persona-upload-reset">Limpiar</button>
+          </div>
+        </form>
+
+        <form id="persona-form" class="form-grid persona-mode-form advanced-form">
+          <input type="hidden" name="id" />
+          <label>Nombre<input name="name" required /></label>
+          <label>Descripcion<textarea name="description" rows="2"></textarea></label>
+          <label>Rol<input name="role" required /></label>
+          <label>Segmento<input name="segment" required /></label>
+          <label>Contexto funcional<textarea name="functional_context" rows="2"></textarea></label>
+          <label>Contexto de uso<textarea name="usage_context" rows="2"></textarea></label>
+          <label>Metas<textarea name="goals" rows="2"></textarea></label>
+          <label>Motivaciones<textarea name="motivations" rows="2"></textarea></label>
+          <label>Necesidades<textarea name="needs" rows="2"></textarea></label>
+          <label>Comportamientos<textarea name="behaviors" rows="2"></textarea></label>
+          <label>Dolores<textarea name="pains" rows="2"></textarea></label>
+          <label>Frenos<textarea name="frictions" rows="2"></textarea></label>
+          <label>Rasgos de personalidad<textarea name="personality_traits" rows="2"></textarea></label>
+          <label>Entorno digital<textarea name="digital_environment" rows="2"></textarea></label>
+          <label>Comportamiento digital<textarea name="digital_behavior" rows="2"></textarea></label>
+          <label>Dispositivos<input name="devices" /></label>
+          <label>
+            Nivel digital
+            <select name="digital_level">
+              <option value="low">Bajo</option>
+              <option value="medium" selected>Intermedio</option>
+              <option value="high">Alto</option>
+            </select>
+          </label>
+          <label>Apps usadas<textarea name="apps_used" rows="2"></textarea></label>
+          <label>Restricciones<textarea name="restrictions" rows="2"></textarea></label>
+          <label>Adjuntos<textarea name="attachments" rows="2" placeholder="URLs o notas"></textarea></label>
+          <div class="form-actions">
+            <button type="submit">Guardar persona</button>
+            <button type="button" class="ghost-button" id="persona-reset">Limpiar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Chat drawer -->
+    <aside class="chat-drawer" id="chat-drawer" aria-hidden="true">
+      <header class="chat-drawer__header">
+        <div class="chat-drawer__persona">
+          <div class="chat-drawer__avatar-wrap" id="chat-drawer-initials">P</div>
+          <div class="chat-drawer__persona-info">
+            <p class="chat-drawer__name" id="chat-drawer-name">Persona</p>
+            <p class="chat-drawer__role" id="chat-drawer-role">Arquetipo sintético</p>
+          </div>
+        </div>
+        <button class="chat-drawer__close" id="chat-drawer-close" aria-label="Cerrar chat">×</button>
+      </header>
+      <div class="chat-drawer__body" id="chat-drawer-body"></div>
+    </aside>
 
     <script type="module" src="./src/main.js"></script>
   </body>

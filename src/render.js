@@ -4,6 +4,7 @@ import { requiresProject, getProjectById, getPersonaById } from "./utils.js";
 import { renderProjects, renderPersonas, renderTasks, renderRuns, renderCalibration } from "./render-entities.js";
 import { renderDashboard } from "./render-dashboard.js";
 import { renderPersonaDetail } from "./render-persona-detail.js";
+import { renderChatDrawer } from "./render-chat-drawer.js";
 import { syncHashWithUi } from "./router.js";
 
 export function render() {
@@ -17,6 +18,7 @@ export function render() {
   renderRuns();
   renderCalibration();
   renderDashboard();
+  renderChatDrawer();
   syncHashWithUi();
 }
 
@@ -43,6 +45,36 @@ export function renderSection() {
   );
   navTabs.forEach((tab) => tab.classList.toggle("is-disabled", !ui.selectedProjectId && requiresProject(tab.dataset.section)));
   sections.forEach((section) => section.classList.toggle("is-active", section.id === `section-${ui.section}`));
+
+  // Toggle nav group headers
+  document.querySelectorAll(".nav-group-header").forEach((header) => {
+    header.classList.toggle("hidden", !ui.selectedProjectId);
+  });
+
+  // Dashboard tab label + icon = project name
+  const dashTab = document.getElementById("nav-dashboard-tab");
+  if (dashTab) {
+    const project = getProjectById(ui.selectedProjectId, getState());
+    const label = project ? project.name : "Dashboard";
+    dashTab.childNodes[dashTab.childNodes.length - 1].textContent = label;
+    dashTab.dataset.icon = project ? label.slice(0, 2).toUpperCase() : "DA";
+  }
+
+  // Topbar breadcrumb
+  const breadcrumb = document.getElementById("topbar-breadcrumb");
+  if (breadcrumb) {
+    const state = getState();
+    const project = getProjectById(ui.selectedProjectId, state);
+    breadcrumb.textContent = project ? `Workspace › ${project.name}` : "Workspace";
+  }
+
+  // Topbar date
+  const dateEl = document.getElementById("topbar-date");
+  if (dateEl && !dateEl.dataset.set) {
+    dateEl.textContent = new Date().toLocaleDateString("es-ES", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+    dateEl.dataset.set = "1";
+  }
+
   if (ui.section === "projects") {
     sectionTitle.textContent = "Projects";
     return;
@@ -59,14 +91,25 @@ export function renderRuntimeBadge() {
   const state = getState();
   const ui = getUi();
   const runtime = getRuntime();
+
+  // Legacy topbar pill (kept for compatibility)
   const badge = document.getElementById("runtime-badge");
-  if (!badge) {
-    return;
+  if (badge) {
+    const engine = runtime.backend ? `backend · ${runtime.runner}` : "browser fallback";
+    const project = getProjectById(ui.selectedProjectId, state);
+    const mcpLabel = runtime.figma_mcp ? "Figma MCP ready" : `MCP ${runtime.mcp}`;
+    badge.textContent = project ? `${project.name} · ${engine} · ${mcpLabel}` : `${engine} · ${mcpLabel}`;
   }
-  const engine = runtime.backend ? `backend · ${runtime.runner}` : "browser fallback";
-  const project = getProjectById(ui.selectedProjectId, state);
-  const mcpLabel = runtime.figma_mcp ? "Figma MCP ready" : `MCP ${runtime.mcp}`;
-  badge.textContent = project ? `${project.name} · ${engine} · ${mcpLabel}` : `${engine} · ${mcpLabel}`;
+
+  // New sidebar runtime indicator
+  const dot = document.getElementById("runtime-dot");
+  const label = document.getElementById("runtime-label");
+  if (dot && label) {
+    const online = runtime.backend;
+    dot.classList.toggle("is-online", online);
+    const engine = online ? runtime.runner || "backend" : "browser fallback";
+    label.textContent = online ? `Online · ${engine}` : "Offline · simulado";
+  }
 }
 
 export function createRuntimeBadge() {

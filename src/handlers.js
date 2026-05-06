@@ -86,6 +86,8 @@ export async function onPersonaSubmit(event) {
   }
 
   ui.editingPersonaId = null;
+  const { closePersonaModal } = await import("./persona-modal.js");
+  closePersonaModal();
   ensureSelection();
   render();
   event.currentTarget.reset();
@@ -308,8 +310,10 @@ export async function handlePersonaAction(action, id) {
     ui.editingPersonaId = id;
     ui.personaCreateMode = "advanced";
     const { setPersonaCreateMode } = await import("./persona-modes.js");
+    const { openPersonaModal } = await import("./persona-modal.js");
     setPersonaCreateMode("advanced");
     fillPersonaForm(persona);
+    openPersonaModal();
     return;
   }
 

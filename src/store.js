@@ -22,6 +22,7 @@ let ui = {
   personaChatMode: "free",
   personaChatAnchorRunId: "",
   personaChatBusy: false,
+  chatDrawer: { open: false, personaId: null, conversationId: null },
   filters: {
     personaId: "all",
     taskId: "all",
