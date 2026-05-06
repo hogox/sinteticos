@@ -40,8 +40,12 @@ export function labelDigitalLevel(level) {
   return level === "high" ? "Nivel alto" : level === "low" ? "Nivel bajo" : "Nivel intermedio";
 }
 
+export function labelTaskType(type) {
+  return type === "idea" ? "Exploración de idea" : "Recorrido guiado";
+}
+
 export function formatTaskLabel(task) {
-  return `${task.type} · ${task.prompt.slice(0, 48)}`;
+  return `${labelTaskType(task.type)} · ${task.prompt.slice(0, 48)}`;
 }
 
 export function metricValue(value) {

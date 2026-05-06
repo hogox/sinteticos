@@ -79,6 +79,10 @@ export function renderSection() {
     sectionTitle.textContent = "Projects";
     return;
   }
+  if (ui.section === "tasks") {
+    sectionTitle.textContent = "Tareas";
+    return;
+  }
   if (ui.section === "persona-detail") {
     const persona = getPersonaById(ui.personaDetailId, getState());
     sectionTitle.textContent = persona ? persona.name : "Persona";

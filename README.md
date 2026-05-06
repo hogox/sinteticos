@@ -195,6 +195,16 @@ npx playwright install chromium
 
 Si eso no esta instalado, la app sigue operando con fallback simulado.
 
+## Variables de entorno
+
+| Variable | Default | Descripcion |
+|---|---|---|
+| `PORT` | `8787` | Puerto del servidor local |
+| `ANTHROPIC_API_KEY` | — | API key de Anthropic (requerida para runs con LLM) |
+| `SINTETICOS_VISION_MODEL` | `claude-haiku-4-5-20251001` | Modelo usado para analisis visual con vision |
+| `SINTETICOS_VISION_LIMIT_USD` | `5` | Limite de gasto en USD para vision por sesion |
+| `SINTETICOS_BROWSER_HEADLESS` | `true` | Corre Playwright sin ventana visible. Setear en `false` para ver Chrome durante los runs (util para debug) |
+
 ## Datos y persistencia
 
 - `data/state.json`: estado persistido del laboratorio cuando hay backend.

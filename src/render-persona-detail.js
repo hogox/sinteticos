@@ -6,6 +6,7 @@ import {
   getPersonaById,
   getProjectById,
   getTaskById,
+  labelTaskType,
   labelDigitalLevel,
   severityToClass,
   statusClass
@@ -147,9 +148,24 @@ function comparisonRow(label, currentText, peerText, delta, caption) {
   `;
 }
 
+function taskCapabilityPills(task) {
+  return [
+    `<span class="pill">Hasta ${task.max_steps} pasos</span>`,
+    task.mcp_enabled ? '<span class="pill">Con apoyo MCP</span>' : "",
+    task.predictive_attention_enabled ? '<span class="pill">Atención estimada</span>' : "",
+    task.artifacts_enabled ? '<span class="pill">Guarda evidencia</span>' : ""
+  ]
+    .filter(Boolean)
+    .join("");
+}
+
+function taskStatusLabel(status) {
+  return status === "ready" ? "Lista" : status === "paused" ? "En pausa" : status || "Activa";
+}
+
 function renderTasks(tasks) {
   if (!tasks.length) {
-    return emptyStateMarkup("Esta persona todavía no tiene tasks asociadas.");
+    return emptyStateMarkup("Esta persona todavía no tiene tareas asociadas.");
   }
 
   return tasks
@@ -158,16 +174,13 @@ function renderTasks(tasks) {
         <article class="list-card">
           <header>
             <div>
-              <strong>${escapeHtml(task.prompt || "Task sin prompt")}</strong>
-              <p>${escapeHtml(task.type)} · ${escapeHtml(task.success_criteria || "Sin criterio de exito")}</p>
+              <strong>${escapeHtml(task.prompt || "Tarea sin objetivo")}</strong>
+              <p>${escapeHtml(labelTaskType(task.type))} · ${escapeHtml(task.success_criteria || "Sin señal de éxito definida")}</p>
             </div>
-            <span class="tag">${escapeHtml(task.status || "ready")}</span>
+            <span class="tag">${escapeHtml(taskStatusLabel(task.status))}</span>
           </header>
           <div class="meta-row">
-            <span class="pill">max ${task.max_steps} steps</span>
-            ${task.mcp_enabled ? '<span class="pill">MCP on</span>' : ""}
-            ${task.predictive_attention_enabled ? '<span class="pill">Predictive on</span>' : ""}
-            ${task.artifacts_enabled ? '<span class="pill">Artefactos on</span>' : ""}
+            ${taskCapabilityPills(task)}
           </div>
           ${task.url ? `<p>${escapeHtml(task.url)}</p>` : ""}
         </article>

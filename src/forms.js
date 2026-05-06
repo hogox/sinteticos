@@ -34,7 +34,7 @@ export function fillTaskForm(task) {
       field.value = task[key];
     }
   });
-  document.getElementById("task-form-title").textContent = "Editar task";
+  document.getElementById("task-form-title").textContent = "Editar tarea";
 }
 
 export function resetProjectForm() {
@@ -60,7 +60,7 @@ export function resetTaskForm() {
   form.reset();
   form.elements.namedItem("artifacts_enabled").checked = true;
   form.elements.namedItem("type").value = "navigation";
-  document.getElementById("task-form-title").textContent = "Crear task";
+  document.getElementById("task-form-title").textContent = "Crear tarea";
 }
 
 export function fillSelect(id, items, selectedId, keepPlaceholder, formatter) {

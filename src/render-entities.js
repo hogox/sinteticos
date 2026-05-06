@@ -4,6 +4,7 @@ import {
   formatShortDate,
   statusClass,
   labelDigitalLevel,
+  labelTaskType,
   formatTaskLabel,
   emptyStateMarkup,
   getPersonaById,
@@ -15,6 +16,21 @@ import { fillSelect, toggleFormDisabled, resetProjectForm, resetPersonaForm, res
 import { observedDetailHtml, inferredDetailHtml, predictiveDetailHtml, drawRunObserved, drawPredictiveCanvas, skillAnalysisHtml, skillBatchHtml } from "./render-detail.js";
 
 const PROJECT_COLORS = ["#2563eb", "#7c3aed", "#0891b2", "#059669", "#d97706", "#dc2626", "#db2777", "#65a30d"];
+
+function taskStatusLabel(status) {
+  return status === "ready" ? "Lista" : status === "paused" ? "En pausa" : status || "Activa";
+}
+
+function taskCapabilityPills(task) {
+  return [
+    `<span class="pill">Hasta ${task.max_steps} pasos</span>`,
+    task.mcp_enabled ? '<span class="pill">Con apoyo MCP</span>' : "",
+    task.predictive_attention_enabled ? '<span class="pill">Atencion estimada</span>' : "",
+    task.artifacts_enabled ? '<span class="pill">Guarda evidencia</span>' : ""
+  ]
+    .filter(Boolean)
+    .join("");
+}
 
 function projectColor(name) {
   let hash = 0;
@@ -144,17 +160,16 @@ export function renderTasks() {
         <article class="list-card${selected}" data-task-id="${task.id}">
           <header>
             <div>
-              <strong>${escapeHtml(task.prompt.slice(0, 58) || "Task sin prompt")}</strong>
-              <p>${task.type} · ${persona ? escapeHtml(persona.name) : "Sin persona"}</p>
+              <strong>${escapeHtml(task.prompt.slice(0, 58) || "Tarea sin objetivo")}</strong>
+              <p>${escapeHtml(labelTaskType(task.type))} · ${persona ? escapeHtml(persona.name) : "Sin persona asignada"}</p>
             </div>
-            <span class="tag">${task.status}</span>
+            <span class="tag">${escapeHtml(taskStatusLabel(task.status))}</span>
           </header>
-          <p>${escapeHtml(task.success_criteria || "Sin criterio de exito")}</p>
+          <p>${escapeHtml(task.success_criteria || "Todavía no tiene una señal de éxito definida.")}</p>
           <div class="meta-row">
-            <span class="pill">max ${task.max_steps} steps</span>
-            ${task.mcp_enabled ? '<span class="pill">MCP on</span>' : ""}
-            ${task.predictive_attention_enabled ? '<span class="pill">Predictive on</span>' : ""}
+            ${taskCapabilityPills(task)}
           </div>
+          ${task.url ? `<p>${escapeHtml(task.url)}</p>` : ""}
           <div class="action-row">
             <button class="ghost-button" data-task-action="edit" data-id="${task.id}">Editar</button>
             <button class="ghost-button" data-task-action="clone-run" data-id="${task.id}">Correr</button>
@@ -165,8 +180,8 @@ export function renderTasks() {
     })
     .join("");
   list.innerHTML = projectId
-    ? tasksHtml || emptyStateMarkup("Todavia no hay tasks creados en este proyecto.")
-    : emptyStateMarkup("Primero crea o selecciona un proyecto para usar tasks.");
+    ? tasksHtml || emptyStateMarkup("Todavía no hay tareas creadas en este proyecto.")
+    : emptyStateMarkup("Primero crea o selecciona un proyecto para definir tareas.");
 
   fillSelect("run-task", tasks, ui.selectedTaskId, true, formatTaskLabel);
   fillSelect("calibration-task", tasks, ui.selectedTaskId, true, formatTaskLabel);
@@ -192,9 +207,9 @@ export function renderRuns() {
           <div class="run-headline">
             <div>
               <strong>${persona ? escapeHtml(persona.name) : "Persona eliminada"}</strong>
-              <p>${task ? escapeHtml(task.type) : "task"} · ${task ? escapeHtml(task.prompt.slice(0, 40)) : "sin task"}</p>
+              <p>${task ? escapeHtml(labelTaskType(task.type)) : "Tarea"} · ${task ? escapeHtml(task.prompt.slice(0, 40)) : "sin tarea"}</p>
             </div>
-            <span class="status-pill ${statusClass(run.completion_status)}">${run.completion_status}</span>
+            <span class="status-pill ${statusClass(run.completion_status)}">${escapeHtml(run.completion_status)}</span>
           </div>
           <div class="meta-row">
             <span class="pill">seed ${run.seed}</span>
@@ -234,7 +249,7 @@ export function renderRuns() {
 
   const persona = getPersonaById(run.persona_id, state);
   const task = getTaskById(run.task_id, state);
-  title.textContent = `${persona ? persona.name : "Persona"} · ${task ? task.type : "run"}`;
+  title.textContent = `${persona ? persona.name : "Persona"} · ${task ? labelTaskType(task.type) : "run"}`;
 
   const skillPanel = skillAnalysisHtml(run);
 
