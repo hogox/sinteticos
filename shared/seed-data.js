@@ -9,7 +9,6 @@ export function buildInitialState(uid, simulateRunFn) {
   };
   const personaA = {
     id: uid("persona"),
-    project_id: project.id,
     name: "Catalina, viajera practica",
     description: "Busca resolver rapido y no tolera pasos ambiguos cuando esta en movimiento.",
     role: "Profesional comercial",
@@ -38,7 +37,6 @@ export function buildInitialState(uid, simulateRunFn) {
 
   const personaB = {
     id: uid("persona"),
-    project_id: project.id,
     name: "Matias, comprador tecnico",
     description: "Detecta ineficiencias rapido y espera control sobre lo que hace.",
     role: "Ingeniero de software",

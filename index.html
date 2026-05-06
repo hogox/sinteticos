@@ -10,13 +10,13 @@
   <body>
     <div class="app-shell">
       <aside class="sidebar">
-        <div class="sidebar__brand">
+        <button type="button" class="sidebar__brand" id="sidebar-brand-link" aria-label="Ir al inicio">
           <div class="sidebar__brand-icon">SL</div>
           <div class="sidebar__brand-text">
             <p class="sidebar__brand-name">Sinteticos Lab</p>
             <p class="sidebar__brand-sub">Research Ops</p>
           </div>
-        </div>
+        </button>
 
         <div class="sidebar__profile">
           <div class="sidebar__profile-avatar" id="sidebar-avatar">SL</div>
@@ -27,18 +27,15 @@
         </div>
 
         <nav class="sidebar__nav" aria-label="Secciones">
-          <button class="nav-tab is-active" data-section="projects" data-icon="PR">Projects</button>
+          <button class="nav-tab is-active" data-section="personas" data-icon="PE">Personas</button>
+          <button class="nav-tab" id="nav-projects-tab" data-section="projects" data-icon="PR">Projects</button>
 
-          <button class="nav-tab hidden" id="nav-dashboard-tab" data-section="dashboard" data-section-group="dashboards" data-icon="DA">Dashboard</button>
+          <button class="nav-tab hidden nav-tab--child" id="nav-dashboard-tab" data-section="dashboard" data-section-group="aplicaciones" data-icon="DA">Dashboard</button>
+          <button class="nav-tab hidden nav-tab--child" data-section="tasks" data-section-group="aplicaciones" data-icon="TA">Tareas</button>
+          <button class="nav-tab hidden nav-tab--child" data-section="runs" data-section-group="aplicaciones" data-icon="RU">Runs</button>
+          <button class="nav-tab hidden nav-tab--child" data-section="calibration" data-section-group="aplicaciones" data-icon="CA">Calibration</button>
 
-          <p class="nav-group-header hidden" data-nav-group="aplicaciones">Aplicaciones</p>
-          <button class="nav-tab hidden" data-section="personas" data-section-group="aplicaciones" data-icon="PE">Personas</button>
-          <button class="nav-tab hidden" data-section="tasks" data-section-group="aplicaciones" data-icon="TA">Tareas</button>
-          <button class="nav-tab hidden" data-section="runs" data-section-group="aplicaciones" data-icon="RU">Runs</button>
-          <button class="nav-tab hidden" data-section="calibration" data-section-group="aplicaciones" data-icon="CA">Calibration</button>
-
-          <p class="nav-group-header hidden" data-nav-group="plataforma">Plataforma</p>
-          <button class="nav-tab hidden" data-section="policy" data-section-group="plataforma" data-icon="PO">Policy</button>
+          <button class="nav-tab" data-section="policy" data-icon="PO">Policy</button>
         </nav>
 
         <div class="sidebar__footer">
@@ -61,6 +58,34 @@
             <span class="topbar-date" id="topbar-date"></span>
           </div>
         </header>
+
+        <section class="section is-active" id="section-home" aria-label="Inicio">
+          <article class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Usuarios sintéticos</p>
+                <h3>Mis personas</h3>
+              </div>
+              <div class="pill-row">
+                <button class="primary-button" id="home-create-persona-btn">+ Crear persona</button>
+              </div>
+            </div>
+            <div class="persona-cards-grid" id="home-persona-list"></div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Espacios de trabajo</p>
+                <h3>Mis proyectos</h3>
+              </div>
+              <div class="pill-row">
+                <button class="primary-button" id="home-create-project-btn">+ Crear proyecto</button>
+              </div>
+            </div>
+            <div class="project-cards-grid" id="home-project-list"></div>
+          </article>
+        </section>
 
         <section class="section" id="section-dashboard">
           <div id="dashboard-global-view">

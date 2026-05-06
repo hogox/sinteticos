@@ -32,13 +32,12 @@ export function localUpdateProject(id, payload) {
 export function localDeleteProject(id) {
   const state = getState();
   const taskIds = state.tasks.filter((item) => item.project_id === id).map((item) => item.id);
-  const personaIds = state.personas.filter((item) => item.project_id === id).map((item) => item.id);
   return {
     ...state,
     projects: (state.projects || []).filter((item) => item.id !== id),
-    personas: state.personas.filter((item) => item.project_id !== id),
+    // Personas son top-level: sobreviven al borrado del proyecto.
     tasks: state.tasks.filter((item) => item.project_id !== id),
-    runs: state.runs.filter((item) => item.project_id !== id && !taskIds.includes(item.task_id) && !personaIds.includes(item.persona_id)),
+    runs: state.runs.filter((item) => item.project_id !== id && !taskIds.includes(item.task_id)),
     calibrations: state.calibrations.filter((item) => item.project_id !== id),
     persona_conversations: (state.persona_conversations || []).filter((item) => item.project_id !== id)
   };
@@ -172,11 +171,13 @@ export function localCreatePersonaConversation(personaId, payload = {}) {
     return state;
   }
   const now = new Date().toISOString();
+  const kind = payload.kind === "hypothesis" ? "hypothesis" : "chat";
   const conversation = {
     id: uid("thread"),
-    project_id: persona.project_id,
+    project_id: payload.project_id || null,
     persona_id: persona.id,
-    title: payload.title || "Chat principal",
+    kind,
+    title: payload.title || (kind === "hypothesis" ? "Hipótesis sin título" : "Chat principal"),
     mode: payload.mode === "evidence" ? "evidence" : "free",
     anchor_run_id: payload.anchorRunId || null,
     messages: [],
@@ -196,7 +197,7 @@ export function localSendPersonaMessage(personaId, threadId, payload = {}) {
   const now = new Date().toISOString();
   const mode = payload.mode === "evidence" ? "evidence" : thread.mode || "free";
   const anchorRunId = payload.anchorRunId || thread.anchor_run_id || null;
-  const project = getProjectById(persona.project_id, state);
+  const project = thread.project_id ? getProjectById(thread.project_id, state) : null;
   const tasks = (state.tasks || []).filter((task) => task.persona_id === persona.id);
   const runs = (state.runs || []).filter((run) => run.persona_id === persona.id);
   const userMessage = {
@@ -205,7 +206,17 @@ export function localSendPersonaMessage(personaId, threadId, payload = {}) {
     content: String(payload.content || "").trim(),
     created_at: now
   };
-  const reply = buildLocalPersonaReply({ persona, project, tasks, runs, message: userMessage.content, mode, anchorRunId, history: thread.messages });
+  const reply = buildLocalPersonaReply({
+    persona,
+    project,
+    tasks,
+    runs,
+    message: userMessage.content,
+    mode,
+    anchorRunId,
+    kind: thread.kind || "chat",
+    history: thread.messages
+  });
   const personaMessage = {
     id: uid("msg"),
     role: "persona",
@@ -213,8 +224,15 @@ export function localSendPersonaMessage(personaId, threadId, payload = {}) {
     evidence_mode: reply.evidence_mode,
     reasoning_note: reply.reasoning_note,
     citations: reply.citations,
+    verdict: reply.verdict || null,
+    verdict_reason: reply.verdict_reason || null,
+    conditions: reply.conditions || null,
+    frictions: reply.frictions || null,
     created_at: new Date().toISOString()
   };
+  const isFirstMessage = (thread.messages || []).length === 0;
+  const newTitle =
+    thread.kind === "hypothesis" && isFirstMessage ? userMessage.content.slice(0, 70) : thread.title;
   return {
     ...state,
     persona_conversations: (state.persona_conversations || []).map((item) =>
@@ -223,6 +241,7 @@ export function localSendPersonaMessage(personaId, threadId, payload = {}) {
             ...item,
             mode,
             anchor_run_id: anchorRunId,
+            title: newTitle,
             messages: [...item.messages, userMessage, personaMessage],
             updated_at: personaMessage.created_at
           }
@@ -280,15 +299,12 @@ export function ensureSelection() {
   if (ui.selectedProjectId && !getProjectById(ui.selectedProjectId, state)) {
     ui.selectedProjectId = null;
   }
-  if (!ui.selectedPersonaId || !getPersonaById(ui.selectedPersonaId, state) || getPersonaById(ui.selectedPersonaId, state)?.project_id !== ui.selectedProjectId) {
-    ui.selectedPersonaId = state.personas.find((item) => item.project_id === ui.selectedProjectId)?.id || null;
+  // Personas son globales: ya no filtramos por project.
+  if (ui.selectedPersonaId && !getPersonaById(ui.selectedPersonaId, state)) {
+    ui.selectedPersonaId = state.personas[0]?.id || null;
   }
-  if (
-    !ui.personaDetailId ||
-    !getPersonaById(ui.personaDetailId, state) ||
-    getPersonaById(ui.personaDetailId, state)?.project_id !== ui.selectedProjectId
-  ) {
-    ui.personaDetailId = ui.selectedPersonaId;
+  if (ui.personaDetailId && !getPersonaById(ui.personaDetailId, state)) {
+    ui.personaDetailId = null;
   }
   if (!ui.selectedTaskId || !getTaskById(ui.selectedTaskId, state) || getTaskById(ui.selectedTaskId, state)?.project_id !== ui.selectedProjectId) {
     ui.selectedTaskId = state.tasks.find((item) => item.project_id === ui.selectedProjectId)?.id || null;

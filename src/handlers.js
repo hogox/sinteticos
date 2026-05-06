@@ -45,12 +45,8 @@ export async function onProjectSubmit(event) {
 export async function onPersonaSubmit(event) {
   event.preventDefault();
   const ui = getUi();
-  if (!ui.selectedProjectId) {
-    return;
-  }
   const formData = new FormData(event.currentTarget);
   const payload = {
-    project_id: ui.selectedProjectId,
     name: value(formData, "name"),
     description: value(formData, "description"),
     role: value(formData, "role"),
@@ -237,7 +233,16 @@ export async function onPersonaChatSubmit(event) {
     let threadId = ui.selectedConversationId;
     const existingThread = (getState().persona_conversations || []).find((item) => item.id === threadId && item.persona_id === persona.id);
     if (!existingThread) {
-      setState(await api.createPersonaConversation(persona.id, { mode, anchorRunId }));
+      const isHypothesisDrawer = ui.chatDrawer?.open && ui.chatDrawer?.mode === "hypothesis";
+      setState(
+        await api.createPersonaConversation(persona.id, {
+          kind: isHypothesisDrawer ? "hypothesis" : "chat",
+          title: isHypothesisDrawer ? "Hipótesis sin título" : undefined,
+          mode: isHypothesisDrawer ? "free" : mode,
+          anchorRunId: isHypothesisDrawer ? null : anchorRunId,
+          project_id: isHypothesisDrawer ? null : ui.selectedProjectId || null
+        })
+      );
       const nextThread = (getState().persona_conversations || []).find((item) => item.persona_id === persona.id);
       threadId = nextThread ? nextThread.id : null;
       ui.selectedConversationId = threadId;
@@ -363,6 +368,7 @@ export async function handlePersonaDetailAction(action, id) {
 
   if (action === "back") {
     ui.section = "personas";
+    ui.personaDetailId = null;
     render();
     return;
   }
@@ -391,14 +397,22 @@ export async function handlePersonaDetailAction(action, id) {
     return;
   }
 
-  if (action === "new-chat") {
-    setState(await api.createPersonaConversation(persona.id, { mode: ui.personaChatMode, anchorRunId: ui.personaChatAnchorRunId }));
+  if (action === "new-chat" || action === "new-hypothesis") {
+    const isHypothesis = action === "new-hypothesis";
+    setState(
+      await api.createPersonaConversation(persona.id, {
+        kind: isHypothesis ? "hypothesis" : "chat",
+        title: isHypothesis ? "Hipótesis sin título" : undefined,
+        mode: isHypothesis ? "free" : ui.personaChatMode,
+        anchorRunId: isHypothesis ? null : ui.personaChatAnchorRunId,
+        project_id: isHypothesis ? null : ui.selectedProjectId || null
+      })
+    );
     const thread = (getState().persona_conversations || []).find((item) => item.persona_id === persona.id);
     ui.selectedConversationId = thread ? thread.id : null;
     render();
     return;
   }
-
 }
 
 export async function handleTaskAction(action, id) {

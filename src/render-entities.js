@@ -46,9 +46,10 @@ export function renderProjects() {
   const projectHtml = projects
     .map((project) => {
       const selected = project.id === ui.selectedProjectId ? " is-selected" : "";
-      const personaCount = (state.personas || []).filter((item) => item.project_id === project.id).length;
+      const projectRuns = (state.runs || []).filter((item) => item.project_id === project.id);
+      const personaCount = new Set(projectRuns.map((r) => r.persona_id)).size;
       const taskCount = (state.tasks || []).filter((item) => item.project_id === project.id).length;
-      const runCount = (state.runs || []).filter((item) => item.project_id === project.id).length;
+      const runCount = projectRuns.length;
       const initials = project.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
       const color = projectColor(project.name);
       return `
@@ -98,8 +99,8 @@ export function renderPersonas() {
   const state = getState();
   const ui = getUi();
   const list = document.getElementById("persona-list");
-  const projectId = ui.selectedProjectId;
-  const personas = projectId ? state.personas.filter((item) => item.project_id === projectId) : [];
+  // Personas son top-level: pool global, no filtramos por project.
+  const personas = (state.personas || []).filter((p) => p.status !== "archived");
   const personasHtml = personas
     .map((persona) => {
       const selected = persona.id === ui.selectedPersonaId ? " is-selected" : "";
@@ -133,14 +134,12 @@ export function renderPersonas() {
       `;
     })
     .join("");
-  list.innerHTML = projectId
-    ? personasHtml || emptyStateMarkup("Todavia no hay personas creadas en este proyecto.")
-    : emptyStateMarkup("Primero crea o selecciona un proyecto para usar personas.");
+  list.innerHTML = personasHtml || emptyStateMarkup("Aún no creaste personas. Empieza con una para validar hipótesis o lanzar runs.");
 
   fillSelect("task-persona-select", personas, ui.selectedPersonaId);
   fillSelect("run-persona", personas, ui.selectedPersonaId, true);
   fillSelect("calibration-persona", personas, ui.selectedPersonaId, true);
-  toggleFormDisabled("persona-form", Boolean(projectId));
+  toggleFormDisabled("persona-form", true);
   if (!ui.editingPersonaId) {
     resetPersonaForm();
   }
@@ -233,7 +232,7 @@ export function renderRuns() {
   const batchPanel = document.getElementById("run-batch-panel");
   if (batchPanel) batchPanel.innerHTML = skillBatchHtml(runs);
 
-  document.querySelectorAll(".pill-button").forEach((button) =>
+  document.querySelectorAll("[data-detail-view]").forEach((button) =>
     button.classList.toggle("is-active", button.dataset.detailView === ui.runDetailView)
   );
 

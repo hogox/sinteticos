@@ -144,10 +144,63 @@ function conversationalReply(persona, message) {
   return `Yo lo bajaría a algo muy concreto: necesito entender rápido si esto me ayuda o me complica. ${background} Si me da claridad y respeta mis límites, puedo seguir; si no, necesito más señales antes de confiar. ${followUpQuestion(message)}`;
 }
 
-export function buildLocalPersonaReply({ persona, tasks = [], runs = [], message = "", mode = "free", anchorRunId = null }) {
+function inferLocalHypothesisVerdict(persona, message) {
+  const normalized = asText(message).toLowerCase();
+  const frictionsText = asText(persona.frictions).toLowerCase();
+  const painsText = asText(persona.pains).toLowerCase();
+  const mentionsPrice = /(\$|precio|costo|pago|cobr|caro|barato|usd|cl\$|mxn)/i.test(normalized);
+  const asksAdoption = /(comprar|usar|adopt|probar|suscrib|registr|aceptar)/i.test(normalized);
+
+  // Heurística simple: si menciona precio y la persona tiene frenos sobre confianza/costos → conditional.
+  if (mentionsPrice && /confian|costo|precio|sorpresa|claridad/.test(frictionsText + " " + painsText)) {
+    return {
+      verdict: "conditional",
+      verdict_reason: "Necesito ver el costo total claro antes de decidir.",
+      conditions: ["Costos transparentes desde el principio", "Posibilidad de probar sin compromiso"],
+      frictions: ["Sorpresas en el precio final", "Falta de claridad en lo que incluye"]
+    };
+  }
+  if (asksAdoption && persona.digital_level === "low") {
+    return {
+      verdict: "conditional",
+      verdict_reason: "Lo probaría solo si me lo explican muy paso a paso.",
+      conditions: ["Onboarding muy guiado", "Soporte humano accesible"],
+      frictions: ["No quiero perder tiempo configurando algo que no entiendo"]
+    };
+  }
+  if (asksAdoption) {
+    return {
+      verdict: "conditional",
+      verdict_reason: "Depende de cómo encaja con lo que hago día a día.",
+      conditions: ["Que me ahorre pasos reales", "Que no me obligue a aprender otra herramienta"],
+      frictions: ["Otra app más para mantener"]
+    };
+  }
+  return {
+    verdict: "unclear",
+    verdict_reason: "Con lo que me cuentas no me alcanza para decidir.",
+    conditions: [],
+    frictions: ["No tengo suficiente información para evaluarlo bien"]
+  };
+}
+
+export function buildLocalPersonaReply({ persona, tasks = [], runs = [], message = "", mode = "free", anchorRunId = null, kind = "chat" }) {
   const anchoredRun = getAnchoredRun(runs, anchorRunId);
   const latestRun = runs[0] || null;
   const evidenceRun = anchoredRun || (hasEvidenceSignal(message) ? latestRun : null);
+
+  if (kind === "hypothesis") {
+    const verdictData = inferLocalHypothesisVerdict(persona, message);
+    const profile = profileLine(persona);
+    const reply = `${verdictData.verdict_reason} ${profile} ${verdictData.conditions.length ? "Lo aceptaría si se cumple algo concreto." : "¿Puedes ser más específico?"}`;
+    return {
+      reply: reply.trim(),
+      evidence_mode: "inferred",
+      reasoning_note: "Veredicto inferido localmente desde el perfil de la persona (sin LLM).",
+      citations: { run_ids: [], task_ids: [] },
+      ...verdictData
+    };
+  }
 
   if (asksOutsideContext(message) && !evidenceRun) {
     return {

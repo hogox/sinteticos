@@ -11,7 +11,7 @@ import {
   handleTaskAction,
   handleRunAction
 } from "./handlers.js";
-import { getUi, getState, setSkillsCache, getSkillsCache } from "./store.js";
+import { getUi, getState, setState, setSkillsCache, getSkillsCache } from "./store.js";
 import { render } from "./render.js";
 import { renderChatDrawer } from "./render-chat-drawer.js";
 import { renderRuns, renderTasks } from "./render-entities.js";
@@ -44,6 +44,20 @@ export function bindEvents() {
   document.getElementById("run-form").addEventListener("submit", onRunSubmit);
   document.getElementById("calibration-form").addEventListener("submit", onCalibrationSubmit);
   document.getElementById("create-project-btn").addEventListener("click", openProjectModal);
+  const homeCreateProject = document.getElementById("home-create-project-btn");
+  if (homeCreateProject) homeCreateProject.addEventListener("click", openProjectModal);
+  const homeCreatePersona = document.getElementById("home-create-persona-btn");
+  if (homeCreatePersona) homeCreatePersona.addEventListener("click", openPersonaModal);
+  const brandLink = document.getElementById("sidebar-brand-link");
+  if (brandLink) {
+    brandLink.addEventListener("click", () => {
+      const ui = getUi();
+      ui.section = "home";
+      ui.selectedProjectId = null;
+      ui.personaDetailId = null;
+      render();
+    });
+  }
   document.getElementById("project-modal-close").addEventListener("click", closeProjectModal);
   document.getElementById("project-modal").addEventListener("click", (event) => {
     if (event.target.id === "project-modal") closeProjectModal();
@@ -96,9 +110,15 @@ export function bindEvents() {
   });
 }
 
-function openChatDrawer(personaId) {
+function openChatDrawer(personaId, mode = "chat") {
   const ui = getUi();
-  ui.chatDrawer = { open: true, personaId, conversationId: null };
+  ui.chatDrawer = { open: true, personaId, conversationId: null, mode };
+  // En modo hipótesis empezamos con conversación libre, sin run anclado.
+  if (mode === "hypothesis") {
+    ui.personaChatMode = "free";
+    ui.personaChatAnchorRunId = "";
+    ui.selectedConversationId = null;
+  }
   renderChatDrawer();
 }
 
@@ -187,6 +207,33 @@ export function onClick(event) {
     return;
   }
 
+  const openHypothesisBtn = event.target.closest("[data-action='open-hypothesis']");
+  if (openHypothesisBtn) {
+    openChatDrawer(openHypothesisBtn.dataset.personaId, "hypothesis");
+    return;
+  }
+
+  const homePersona = event.target.closest("[data-home-persona-id]");
+  if (homePersona) {
+    ui.personaDetailId = homePersona.dataset.homePersonaId;
+    ui.selectedPersonaId = homePersona.dataset.homePersonaId;
+    ui.section = "persona-detail";
+    render();
+    return;
+  }
+
+  const homeProject = event.target.closest("[data-home-project-id]");
+  if (homeProject) {
+    ui.selectedProjectId = homeProject.dataset.homeProjectId;
+    ui.filters.personaId = "all";
+    ui.filters.taskId = "all";
+    ui.filters.status = "all";
+    ui.section = "dashboard";
+    ensureSelection();
+    render();
+    return;
+  }
+
   const lhAction = event.target.closest("[data-lighthouse-action]");
   if (lhAction) {
     const action = lhAction.dataset.lighthouseAction;
@@ -208,13 +255,29 @@ export function onClick(event) {
     if (navTab.classList.contains("is-disabled")) {
       return;
     }
-    if (navTab.dataset.section === "projects") {
+    const section = navTab.dataset.section;
+    // Personas tab y Policy: limpian la selección de proyecto.
+    if (section === "personas" || section === "policy") {
       ui.selectedProjectId = null;
       ui.filters.personaId = "all";
       ui.filters.taskId = "all";
       ui.filters.status = "all";
     }
-    ui.section = navTab.dataset.section;
+    if (section === "personas") {
+      ui.personaDetailId = null;
+    }
+    // Click en Projects: si hay un proyecto activo, ir a su dashboard. Si no, lista de proyectos.
+    if (section === "projects" && ui.selectedProjectId) {
+      ui.section = "dashboard";
+    } else {
+      if (section === "projects") {
+        ui.selectedProjectId = null;
+        ui.filters.personaId = "all";
+        ui.filters.taskId = "all";
+        ui.filters.status = "all";
+      }
+      ui.section = section;
+    }
     render();
     return;
   }
@@ -228,6 +291,13 @@ export function onClick(event) {
   const personaAction = event.target.closest("[data-persona-action]");
   if (personaAction) {
     handlePersonaAction(personaAction.dataset.personaAction, personaAction.dataset.id);
+    return;
+  }
+
+  const personaTab = event.target.closest("[data-persona-tab]");
+  if (personaTab) {
+    ui.personaDetailTab = personaTab.dataset.personaTab;
+    render();
     return;
   }
 

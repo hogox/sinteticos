@@ -5,7 +5,7 @@ let skillsCache = {
   lhAnalyzing: false, lhResult: null, lhRunId: null, lhView: "summary"
 };
 let ui = {
-  section: "projects",
+  section: "home",
   selectedProjectId: null,
   selectedPersonaId: null,
   personaDetailId: null,
@@ -22,7 +22,8 @@ let ui = {
   personaChatMode: "free",
   personaChatAnchorRunId: "",
   personaChatBusy: false,
-  chatDrawer: { open: false, personaId: null, conversationId: null },
+  chatDrawer: { open: false, personaId: null, conversationId: null, mode: "chat" },
+  personaDetailTab: "perfil",
   filters: {
     personaId: "all",
     taskId: "all",

@@ -257,11 +257,6 @@ function handleAiError(error) {
 
 export async function onPersonaSimpleSubmit(event) {
   event.preventDefault();
-  const ui = getUi();
-  if (!ui.selectedProjectId) {
-    alertError({ title: "Selecciona un proyecto", body: "Las personas se crean dentro de un proyecto activo." });
-    return;
-  }
   const formData = new FormData(event.currentTarget);
   const description = String(formData.get("description") || "").trim();
   const quantity = Math.max(1, Math.min(10, Number(formData.get("quantity")) || 1));
@@ -286,11 +281,6 @@ export async function onPersonaSimpleSubmit(event) {
 
 export async function onPersonaUploadSubmit(event) {
   event.preventDefault();
-  const ui = getUi();
-  if (!ui.selectedProjectId) {
-    alertError({ title: "Selecciona un proyecto", body: "Las personas se crean dentro de un proyecto activo." });
-    return;
-  }
   const form = event.currentTarget;
   const formData = new FormData(form);
   const pasted = String(formData.get("pasted_text") || "").trim();
@@ -547,7 +537,6 @@ async function confirmPersonaPreview() {
     return;
   }
   const sourceMode = ui.personaPreview.sourceMode;
-  const projectId = ui.selectedProjectId;
   const confirmBtn = document.getElementById("persona-preview-confirm");
   if (confirmBtn) {
     confirmBtn.disabled = true;
@@ -555,8 +544,7 @@ async function confirmPersonaPreview() {
   }
   try {
     for (const item of accepted) {
-      const payload = { ...item.persona, project_id: projectId };
-      const nextState = await api.createPersona(payload);
+      const nextState = await api.createPersona(item.persona);
       setState(nextState);
     }
     ensureSelection();
