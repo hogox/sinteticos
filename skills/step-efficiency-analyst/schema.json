@@ -1,0 +1,17 @@
+{
+  "type": "object",
+  "required": ["verdict", "actual_steps", "ideal_steps_estimate", "justification", "suggested_optimizations"],
+  "properties": {
+    "verdict": {
+      "type": "string",
+      "enum": ["muy_eficiente", "razonable", "extenso", "ineficiente"]
+    },
+    "actual_steps": { "type": "integer", "minimum": 0 },
+    "ideal_steps_estimate": { "type": "integer", "minimum": 1 },
+    "justification": { "type": "string" },
+    "suggested_optimizations": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

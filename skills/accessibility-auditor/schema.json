@@ -1,0 +1,28 @@
+{
+  "type": "object",
+  "required": ["summary", "compliance_estimate", "findings"],
+  "properties": {
+    "summary": { "type": "string" },
+    "compliance_estimate": {
+      "type": "string",
+      "enum": ["AA-compliant", "partially-compliant", "non-compliant"]
+    },
+    "persona_amplifiers": { "type": "array", "items": { "type": "string" } },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["wcag_criterion", "level", "severity", "evidence", "remediation"],
+        "properties": {
+          "wcag_criterion": { "type": "string" },
+          "wcag_title": { "type": "string" },
+          "level": { "type": "string", "enum": ["A", "AA", "AAA"] },
+          "severity": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+          "affected_step": { "type": "number" },
+          "evidence": { "type": "string" },
+          "remediation": { "type": "string" }
+        }
+      }
+    }
+  }
+}

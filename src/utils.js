@@ -41,7 +41,9 @@ export function labelDigitalLevel(level) {
 }
 
 export function labelTaskType(type) {
-  return type === "idea" ? "Exploración de idea" : "Recorrido guiado";
+  if (type === "idea") return "Exploración de idea";
+  if (type === "five_second_test") return "Prueba de 5 segundos";
+  return "Recorrido guiado";
 }
 
 export function formatTaskLabel(task) {

@@ -1,4 +1,4 @@
-import { getState, getUi } from "./store.js";
+import { getState, getUi, getSkillsCache } from "./store.js";
 import {
   emptyStateMarkup,
   escapeHtml,
@@ -168,7 +168,7 @@ function comparisonRow(label, currentText, peerText, delta, caption) {
 
 function taskCapabilityPills(task) {
   return [
-    `<span class="pill">Hasta ${task.max_steps} pasos</span>`,
+    task.max_steps ? `<span class="pill">Hasta ${task.max_steps} pasos</span>` : `<span class="pill">Sin límite de pasos</span>`,
     task.mcp_enabled ? '<span class="pill">Con apoyo MCP</span>' : "",
     task.predictive_attention_enabled ? '<span class="pill">Atención estimada</span>' : "",
     task.artifacts_enabled ? '<span class="pill">Guarda evidencia</span>' : ""
@@ -679,7 +679,8 @@ export function renderPersonaDetail() {
   const tabs = [
     { id: "perfil", label: "Perfil" },
     { id: "tareas", label: "Tareas" },
-    { id: "actividad", label: "Actividad" }
+    { id: "actividad", label: "Actividad" },
+    { id: "evolucion", label: "Evolución" }
   ];
 
   const tabsHtml = `
@@ -814,8 +815,13 @@ export function renderPersonaDetail() {
     </article>
   `;
 
+  const evolucionPanel = renderEvolucionPanel(persona);
+
   const tabPanel =
-    activeTab === "tareas" ? tareasPanel : activeTab === "actividad" ? actividadPanel : perfilPanel;
+    activeTab === "tareas" ? tareasPanel
+    : activeTab === "actividad" ? actividadPanel
+    : activeTab === "evolucion" ? evolucionPanel
+    : perfilPanel;
 
   const avatarColor = heroAvatarColor(persona.name || "?");
   const avatarInitials = heroInitials(persona.name);
@@ -849,5 +855,116 @@ export function renderPersonaDetail() {
       ${tabsHtml}
       <div class="persona-detail-tab-panel">${tabPanel}</div>
     </div>
+  `;
+}
+
+function renderEvolucionPanel(persona) {
+  const cache = getSkillsCache();
+  const cacheKey = `evolve:${persona.id}`;
+  const result = cache.evolveByPersona?.[persona.id] || null;
+  const analyzing = cache.evolving === persona.id;
+
+  const state = getState();
+  const personaCalibs = (state.calibrations || []).filter((c) => c.persona_id === persona.id);
+  const personaRuns = (state.runs || []).filter((r) => r.persona_id === persona.id);
+  const lowCalibs = personaCalibs.filter((c) => (c.agreement || 100) < 70).length;
+  const lowRuns = personaRuns.filter((r) => (r.feedback?.rating || 5) <= 2).length;
+
+  const evidenceSummary = `
+    <div class="meta-row">
+      <span class="pill">${personaCalibs.length} calibraciones (${lowCalibs} con &lt; 70% agreement)</span>
+      <span class="pill">${personaRuns.length} runs (${lowRuns} con rating ≤ 2)</span>
+      <span class="pill">v${persona.version || 1}</span>
+    </div>
+  `;
+
+  let body;
+  if (analyzing) {
+    body = `<p class="muted">Analizando feedback con persona-evolver…</p>`;
+  } else if (!result) {
+    body = `<p>Ejecutá el skill <code>persona-evolver</code> para que analice las calibraciones con baja agreement y los runs con rating bajo, y proponga cambios concretos a esta persona.</p>`;
+  } else if (!result.ok) {
+    body = `<p class="error">Error: ${escapeHtml(result.error || "desconocido")}</p>`;
+  } else {
+    body = renderEvolveProposal(persona, result);
+  }
+
+  return `
+    <article class="panel persona-evolve-panel">
+      <div class="panel-header">
+        <div>
+          <p class="eyebrow">Evolución sugerida</p>
+          <h3>Loop de calibración</h3>
+        </div>
+        <div class="panel-actions">
+          <button type="button" data-evolve-persona="${persona.id}" ${analyzing ? "disabled" : ""}>
+            ${result ? "Volver a analizar" : "Analizar y proponer cambios"}
+          </button>
+        </div>
+      </div>
+      ${evidenceSummary}
+      <div class="evolve-body">${body}</div>
+    </article>
+  `;
+}
+
+function renderEvolveProposal(persona, result) {
+  const out = result.output || {};
+  const verdict = out.verdict || "evolve";
+  const summary = out.summary || "";
+  const changes = Array.isArray(out.proposed_changes) ? out.proposed_changes : [];
+  const verdictLabel = {
+    evolve: "Cambios propuestos",
+    insufficient_evidence: "Evidencia insuficiente",
+    persona_well_calibrated: "Persona bien calibrada"
+  }[verdict] || verdict;
+
+  const changesHtml = changes.map((change, idx) => {
+    const currentValue = persona[change.field];
+    const newValue = change.value;
+    const valueDisplay = (v) => {
+      if (Array.isArray(v)) return v.length ? v.map((x) => `<li>${escapeHtml(String(x))}</li>`).join("") : "<em>(vacío)</em>";
+      if (typeof v === "string") return escapeHtml(v) || "<em>(vacío)</em>";
+      return escapeHtml(String(v ?? "(vacío)"));
+    };
+    return `
+      <article class="evolve-change" data-change-idx="${idx}">
+        <header>
+          <strong>${escapeHtml(change.field)}</strong>
+          <span class="pill">${escapeHtml(change.operation)}</span>
+          <span class="pill confidence-${escapeHtml(change.confidence || "medium")}">${escapeHtml(change.confidence || "medium")}</span>
+        </header>
+        <div class="evolve-diff">
+          <div class="evolve-diff__col">
+            <p class="eyebrow">Actual</p>
+            <div class="evolve-diff__value">${Array.isArray(currentValue) ? `<ul>${valueDisplay(currentValue)}</ul>` : valueDisplay(currentValue)}</div>
+          </div>
+          <div class="evolve-diff__col evolve-diff__col--proposed">
+            <p class="eyebrow">Propuesto (${escapeHtml(change.operation)})</p>
+            <div class="evolve-diff__value">${Array.isArray(newValue) ? `<ul>${valueDisplay(newValue)}</ul>` : valueDisplay(newValue)}</div>
+          </div>
+        </div>
+        <p class="evolve-rationale"><strong>Razón:</strong> ${escapeHtml(change.rationale || "")}</p>
+        ${change.expected_impact ? `<p class="evolve-impact"><strong>Impacto esperado:</strong> ${escapeHtml(change.expected_impact)}</p>` : ""}
+        ${change.evidence?.length ? `<p class="evolve-evidence"><strong>Evidencia:</strong> ${change.evidence.map((e) => `<code>${escapeHtml(e)}</code>`).join(", ")}</p>` : ""}
+        <button type="button" class="ghost-button" data-apply-change="${persona.id}" data-change-idx="${idx}">Aplicar este cambio</button>
+      </article>
+    `;
+  }).join("");
+
+  const nextActions = (out.next_actions || []).map((a) => `<li>${escapeHtml(a)}</li>`).join("");
+
+  return `
+    <div class="evolve-verdict evolve-verdict--${verdict}">
+      <strong>${escapeHtml(verdictLabel)}</strong>
+      <p>${escapeHtml(summary)}</p>
+    </div>
+    ${changes.length ? `
+      <div class="evolve-actions-bar">
+        <button type="button" data-apply-all-changes="${persona.id}">Aplicar todos los cambios (v${(persona.version || 1) + 1})</button>
+      </div>
+      <div class="evolve-changes">${changesHtml}</div>
+    ` : ""}
+    ${nextActions ? `<div class="evolve-next-actions"><p class="eyebrow">Próximos pasos</p><ul>${nextActions}</ul></div>` : ""}
   `;
 }

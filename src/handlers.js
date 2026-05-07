@@ -12,9 +12,16 @@ export async function onProjectSubmit(event) {
   event.preventDefault();
   const ui = getUi();
   const formData = new FormData(event.currentTarget);
+  const splitLines = (s) => String(s || "").split("\n").map((l) => l.trim()).filter(Boolean);
   const payload = {
     name: value(formData, "name"),
-    description: value(formData, "description")
+    description: value(formData, "description"),
+    context: {
+      domain_brief: value(formData, "domain_brief"),
+      audience_constraints: value(formData, "audience_constraints"),
+      prior_findings: splitLines(formData.get("prior_findings")),
+      do_not: splitLines(formData.get("do_not"))
+    }
   };
 
   if (ui.editingProjectId) {
@@ -105,7 +112,7 @@ export async function onTaskSubmit(event) {
     prompt: value(formData, "prompt"),
     url: value(formData, "url"),
     success_criteria: value(formData, "success_criteria"),
-    max_steps: Number(value(formData, "max_steps")) || 5,
+    max_steps: Boolean(formData.get("unlimited_steps")) ? null : (Number(value(formData, "max_steps")) || 5),
     mcp_enabled: Boolean(formData.get("mcp_enabled")),
     predictive_attention_enabled: Boolean(formData.get("predictive_attention_enabled")),
     artifacts_enabled: Boolean(formData.get("artifacts_enabled"))

@@ -1,0 +1,40 @@
+{
+  "type": "object",
+  "required": ["verdict", "summary"],
+  "properties": {
+    "verdict": {
+      "type": "string",
+      "enum": ["edits_proposed", "insufficient_data", "prompt_well_calibrated"]
+    },
+    "summary": { "type": "string" },
+    "themes_observed": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["tag", "frequency"],
+        "properties": {
+          "tag": { "type": "string" },
+          "frequency": { "type": "integer", "minimum": 0 },
+          "example_quotes": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "proposed_edits": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["edit_type", "target", "proposed_text", "rationale"],
+        "properties": {
+          "edit_type": { "type": "string", "enum": ["add_instruction", "remove_instruction", "reformulate"] },
+          "target": { "type": "string", "enum": ["system_prompt", "user_prompt", "persona_block", "mood_seed"] },
+          "current_text": { "type": "string" },
+          "proposed_text": { "type": "string" },
+          "rationale": { "type": "string" },
+          "evidence_runs": { "type": "array", "items": { "type": "string" } },
+          "expected_outcome": { "type": "string" }
+        }
+      }
+    },
+    "next_actions": { "type": "array", "items": { "type": "string" } }
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "type": "object",
+  "required": ["job_statement", "dimensions", "verdict", "rationale", "gaps"],
+  "properties": {
+    "job_statement": { "type": "string" },
+    "dimensions": {
+      "type": "object",
+      "required": ["functional", "emotional", "social"],
+      "properties": {
+        "functional": { "type": "string" },
+        "emotional": { "type": "string" },
+        "social": { "type": "string" }
+      }
+    },
+    "verdict": {
+      "type": "string",
+      "enum": ["job_well_served", "functional_only", "partially_served", "job_not_served"]
+    },
+    "rationale": { "type": "string" },
+    "forces_of_progress": {
+      "type": "object",
+      "properties": {
+        "push": { "type": "string" },
+        "pull": { "type": "string" },
+        "anxieties": { "type": "string" },
+        "habits": { "type": "string" }
+      }
+    },
+    "gaps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["dimension", "label", "detail", "recommendation"],
+        "properties": {
+          "dimension": { "type": "string", "enum": ["functional", "emotional", "social"] },
+          "label": { "type": "string" },
+          "evidence_steps": { "type": "array", "items": { "type": "number" } },
+          "detail": { "type": "string" },
+          "recommendation": { "type": "string" }
+        }
+      }
+    }
+  }
+}

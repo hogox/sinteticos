@@ -23,6 +23,7 @@
             "enum": ["performance", "accessibility", "best-practices", "seo"]
           },
           "detail": { "type": "string" },
+          "framework_citation": { "type": "string" },
           "recommendation": { "type": "string" }
         }
       }

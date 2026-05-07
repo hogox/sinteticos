@@ -8,6 +8,11 @@ export function fillProjectForm(project) {
       form.elements.namedItem(key).value = project[key];
     }
   });
+  const ctx = project.context || {};
+  if (form.elements.namedItem("domain_brief")) form.elements.namedItem("domain_brief").value = ctx.domain_brief || "";
+  if (form.elements.namedItem("audience_constraints")) form.elements.namedItem("audience_constraints").value = ctx.audience_constraints || "";
+  if (form.elements.namedItem("prior_findings")) form.elements.namedItem("prior_findings").value = (ctx.prior_findings || []).join("\n");
+  if (form.elements.namedItem("do_not")) form.elements.namedItem("do_not").value = (ctx.do_not || []).join("\n");
   document.getElementById("project-form-title").textContent = `Editar ${project.name}`;
 }
 
@@ -34,6 +39,12 @@ export function fillTaskForm(task) {
       field.value = task[key];
     }
   });
+  const unlimited = form.elements.namedItem("unlimited_steps");
+  const maxStepsField = document.getElementById("max-steps-field");
+  if (unlimited) {
+    unlimited.checked = task.max_steps == null;
+    if (maxStepsField) maxStepsField.style.display = unlimited.checked ? "none" : "";
+  }
   document.getElementById("task-form-title").textContent = "Editar tarea";
 }
 
@@ -60,6 +71,8 @@ export function resetTaskForm() {
   form.reset();
   form.elements.namedItem("artifacts_enabled").checked = true;
   form.elements.namedItem("type").value = "navigation";
+  const maxStepsField = document.getElementById("max-steps-field");
+  if (maxStepsField) maxStepsField.style.display = "";
   document.getElementById("task-form-title").textContent = "Crear tarea";
 }
 

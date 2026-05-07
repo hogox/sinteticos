@@ -1,0 +1,28 @@
+{
+  "type": "object",
+  "required": ["summary", "score", "evaluations"],
+  "properties": {
+    "summary": { "type": "string" },
+    "score": { "type": "number", "minimum": 0, "maximum": 1 },
+    "top_violations": { "type": "array", "items": { "type": "string" } },
+    "evaluations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["framework", "code", "title", "applicable", "violation"],
+        "properties": {
+          "framework": { "type": "string", "enum": ["Nielsen", "Shneiderman"] },
+          "code": { "type": "string" },
+          "title": { "type": "string" },
+          "applicable": { "type": "boolean" },
+          "violation": { "type": "boolean" },
+          "evidence_steps": { "type": "array", "items": { "type": "number" } },
+          "evidence_screens": { "type": "array", "items": { "type": "string" } },
+          "severity": { "type": ["string", "null"], "enum": ["low", "medium", "high", "critical", null] },
+          "comment": { "type": "string" },
+          "reason_not_applicable": { "type": "string" }
+        }
+      }
+    }
+  }
+}

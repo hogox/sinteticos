@@ -1,0 +1,36 @@
+{
+  "type": "object",
+  "required": ["summary", "average_load", "screens_analyzed"],
+  "properties": {
+    "summary": { "type": "string" },
+    "average_load": { "type": "number", "minimum": 1, "maximum": 5 },
+    "screens_analyzed": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["screen", "load_score"],
+        "properties": {
+          "screen": { "type": "string" },
+          "load_score": { "type": "integer", "minimum": 1, "maximum": 5 },
+          "intrinsic": { "type": "string" },
+          "extraneous": { "type": "string" },
+          "evidence_signals": { "type": "array", "items": { "type": "string" } },
+          "reduction_strategies": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["technique", "detail"],
+              "properties": {
+                "technique": {
+                  "type": "string",
+                  "enum": ["chunking", "progressive_disclosure", "smart_defaults", "grouping", "hierarchy", "removal"]
+                },
+                "detail": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

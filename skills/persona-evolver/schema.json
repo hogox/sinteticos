@@ -1,0 +1,36 @@
+{
+  "type": "object",
+  "required": ["verdict", "summary", "proposed_changes"],
+  "properties": {
+    "verdict": {
+      "type": "string",
+      "enum": ["evolve", "insufficient_evidence", "persona_well_calibrated"]
+    },
+    "summary": { "type": "string" },
+    "evidence_strength": {
+      "type": "object",
+      "properties": {
+        "calibrations_below_70": { "type": "integer", "minimum": 0 },
+        "runs_rated_low": { "type": "integer", "minimum": 0 },
+        "saturation": { "type": "string", "enum": ["high", "medium", "low"] }
+      }
+    },
+    "proposed_changes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["field", "operation", "rationale", "confidence"],
+        "properties": {
+          "field": { "type": "string" },
+          "operation": { "type": "string", "enum": ["add", "remove", "update"] },
+          "value": {},
+          "rationale": { "type": "string" },
+          "evidence": { "type": "array", "items": { "type": "string" } },
+          "confidence": { "type": "string", "enum": ["low", "medium", "high"] },
+          "expected_impact": { "type": "string" }
+        }
+      }
+    },
+    "next_actions": { "type": "array", "items": { "type": "string" } }
+  }
+}

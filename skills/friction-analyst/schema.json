@@ -13,6 +13,7 @@
           "severity": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
           "detail": { "type": "string" },
           "evidence_steps": { "type": "array", "items": { "type": "number" } },
+          "framework_citation": { "type": "string" },
           "recommendation": { "type": "string" }
         }
       }
