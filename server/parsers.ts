@@ -49,8 +49,8 @@ export async function parseExcel(buffer, filename = "datos.xlsx") {
     throw new Error(`Excel vacío o inválido: ${filename}`);
   }
   const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(buffer);
-  const lines = [];
+  await workbook.xlsx.load(buffer as any);
+  const lines: string[] = [];
   let totalRows = 0;
   let sheetCount = 0;
 
@@ -60,9 +60,9 @@ export async function parseExcel(buffer, filename = "datos.xlsx") {
     // Detectar headers: primera fila con valores
     let headers = null;
     worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
-      const values = row.values
+      const values = (row.values as any[])
         .slice(1) // ExcelJS usa 1-indexed
-        .map((v) => formatExcelCell(v));
+        .map((v: any) => formatExcelCell(v));
       if (rowNumber === 1) {
         headers = values;
         lines.push(`headers: ${headers.join(" | ")}`);
@@ -112,7 +112,7 @@ export async function fetchAndParseUrl(rawUrl) {
   let url;
   try {
     url = new URL(rawUrl);
-  } catch (error) {
+  } catch (error: any) {
     throw new Error(`URL inválida: ${rawUrl}`);
   }
   if (!["http:", "https:"].includes(url.protocol)) {
@@ -131,7 +131,7 @@ export async function fetchAndParseUrl(rawUrl) {
     });
 
     if (!response.ok) {
-      const error = new Error(`HTTP ${response.status} al traer ${url.href}`);
+      const error = new Error(`HTTP ${response.status} al traer ${url.href}`) as Error & { status?: number };
       error.status = response.status;
       throw error;
     }

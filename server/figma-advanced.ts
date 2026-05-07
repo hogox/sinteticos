@@ -1,12 +1,12 @@
-import { isPageUnavailable } from "./page-inspect.mjs";
-import { safeFingerprintPage, safeGetScreenLabel } from "./page-inspect.mjs";
-import { detectVisualMobileFrame } from "./frame-detection.mjs";
+import { isPageUnavailable } from "./page-inspect.ts";
+import { safeFingerprintPage, safeGetScreenLabel } from "./page-inspect.ts";
+import { detectVisualMobileFrame } from "./frame-detection.ts";
 import {
   prepareFigmaSurface,
   inspectBlockingSurface,
   hasMeaningfulInteractiveTargets
-} from "./figma-surface.mjs";
-import { isFigmaUrl } from "./url-utils.mjs";
+} from "./figma-surface.ts";
+import { isFigmaUrl } from "./url-utils.ts";
 
 export async function extendFigmaStartupWindow(page, task, deadline, timing) {
   if (!task.url || !isFigmaUrl(task.url) || !timing.startupGraceMs) {
@@ -57,7 +57,7 @@ export async function attemptBlindWakeSequence(page, task, deadline, timing) {
     try {
       await page.mouse.click(absolutePoint.x, absolutePoint.y);
       await page.waitForTimeout(timing.interactiveWaitMs);
-    } catch (error) {
+    } catch (error: any) {
     }
 
     const blocking = await inspectBlockingSurface(page);
@@ -77,7 +77,7 @@ export async function attemptBlindWakeSequence(page, task, deadline, timing) {
   return { kind: "timeout" };
 }
 
-export async function getInteractionFrame(page, task = {}) {
+export async function getInteractionFrame(page: any, task: any = {}) {
   const viewport = safeViewportSize(page);
   if (!page || isPageUnavailable(page)) {
     return inferCenteredMobileFrame(viewport);
@@ -135,7 +135,7 @@ export async function getInteractionFrame(page, task = {}) {
     if (figmaCanvas) {
       return { ...figmaCanvas, confidence: 0.85 };
     }
-  } catch (error) {
+  } catch (error: any) {
   }
 
   const visualFrame = await detectVisualMobileFrame(page);
@@ -183,7 +183,7 @@ export async function getInteractionFrame(page, task = {}) {
         .sort((a, b) => b.confidence - a.confidence);
       return candidates[0] || null;
     });
-  } catch (error) {
+  } catch (error: any) {
     detected = null;
   }
 
@@ -265,7 +265,7 @@ export async function refineFrameByPixelAnalysis(page, frame) {
     };
     console.log(`[frame] Pixel analysis trimmed: top=${newTop}px bottom=${frame.height - newBottom}px → ${adjusted.width}x${adjusted.height}`);
     return adjusted;
-  } catch (error) {
+  } catch (error: any) {
     console.error("[frame] Pixel analysis failed:", error.message);
     return frame;
   }
@@ -303,7 +303,7 @@ export function resolveFrameFallbackPoint(frame, step) {
 export function safeViewportSize(page) {
   try {
     return page && typeof page.viewportSize === "function" ? page.viewportSize() : null;
-  } catch (error) {
+  } catch (error: any) {
     return null;
   }
 }

@@ -474,8 +474,9 @@ export async function enrichWithTransitions(nodes, fileKey, accessToken) {
 
     const transitionMap = new Map();
     for (const [id, entry] of Object.entries(data.nodes)) {
-      if (entry.document) {
-        const tid = extractTransitionNodeID(entry.document);
+      const e = entry as any;
+      if (e.document) {
+        const tid = extractTransitionNodeID(e.document);
         if (tid) transitionMap.set(id, tid);
       }
     }

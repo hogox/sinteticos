@@ -1,10 +1,10 @@
 import path from "node:path";
 import { promises as fs } from "node:fs";
-import { ARTIFACTS_DIR, BROWSER_HEADLESS } from "./config.mjs";
-import { uid } from "./utils.mjs";
+import { ARTIFACTS_DIR, BROWSER_HEADLESS } from "./config.ts";
+import { uid } from "./utils.ts";
 import { hashString, mulberry32 } from "../shared/utils.js";
 import { simulateRun } from "../shared/simulation.js";
-import { analyzeFirstImpression, isVisionAvailable } from "./vision.mjs";
+import { analyzeFirstImpression, isVisionAvailable } from "./vision.ts";
 
 export async function executeFiveSecondTestRun(task, persona, iteration, playwright) {
   if (!playwright) {
@@ -111,7 +111,7 @@ export async function executeFiveSecondTestRun(task, persona, iteration, playwri
       source: "server-playwright",
       lighthouse: null
     };
-  } catch (error) {
+  } catch (error: any) {
     return {
       id: runId,
       project_id: task.project_id || persona.project_id || null,

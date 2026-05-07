@@ -61,7 +61,7 @@ function getClient() {
   if (client) return client;
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    const error = new Error("ANTHROPIC_API_KEY no está definida en el entorno.");
+    const error: any = new Error("ANTHROPIC_API_KEY no está definida en el entorno.");
     error.code = "ANTHROPIC_KEY_MISSING";
     throw error;
   }
@@ -81,7 +81,7 @@ async function callTool(systemPrompt, userPrompt) {
   });
   const toolUse = response.content.find((block) => block.type === "tool_use" && block.name === TOOL.name);
   if (!toolUse || !toolUse.input || !Array.isArray(toolUse.input.personas)) {
-    const error = new Error("La respuesta del modelo no incluyó personas válidas.");
+    const error: any = new Error("La respuesta del modelo no incluyó personas válidas.");
     error.code = "ANTHROPIC_BAD_RESPONSE";
     throw error;
   }
@@ -92,7 +92,7 @@ export async function generatePersonas(description, quantity) {
   const n = Math.max(1, Math.min(10, Number(quantity) || 1));
   const trimmed = String(description || "").trim();
   if (!trimmed) {
-    const error = new Error("La descripción está vacía.");
+    const error: any = new Error("La descripción está vacía.");
     error.code = "INVALID_INPUT";
     throw error;
   }
@@ -111,7 +111,7 @@ export async function extractPersonas(sourceText, quantity) {
   const n = Math.max(1, Math.min(20, Number(quantity) || 1));
   const trimmed = String(sourceText || "").trim();
   if (!trimmed) {
-    const error = new Error("El texto fuente está vacío.");
+    const error: any = new Error("El texto fuente está vacío.");
     error.code = "INVALID_INPUT";
     throw error;
   }
@@ -180,7 +180,7 @@ const HYPOTHESIS_SYSTEM = [
 
 const VALID_VERDICTS = ["would_adopt", "would_reject", "conditional", "unclear"];
 
-export async function generatePersonaChatReply({ persona, project, tasks, runs, thread, message, mode, anchorRunId, kind = "chat" }) {
+export async function generatePersonaChatReply({ persona, project, tasks, runs, thread, message, mode, anchorRunId, kind = "chat" }: any) {
   const fallback = () =>
     buildLocalPersonaReply({
       persona,
@@ -233,7 +233,7 @@ export async function generatePersonaChatReply({ persona, project, tasks, runs, 
         run_ids: Array.isArray(parsed.citations?.run_ids) ? parsed.citations.run_ids : [],
         task_ids: Array.isArray(parsed.citations?.task_ids) ? parsed.citations.task_ids : []
       }
-    };
+    } as any;
     if (kind === "hypothesis") {
       result.verdict = VALID_VERDICTS.includes(parsed.verdict) ? parsed.verdict : "unclear";
       result.verdict_reason = String(parsed.verdict_reason || "");
@@ -241,7 +241,7 @@ export async function generatePersonaChatReply({ persona, project, tasks, runs, 
       result.frictions = Array.isArray(parsed.frictions) ? parsed.frictions.slice(0, 3).map(String) : [];
     }
     return result;
-  } catch (error) {
+  } catch (error: any) {
     return fallback();
   }
 }

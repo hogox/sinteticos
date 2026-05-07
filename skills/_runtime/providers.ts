@@ -17,7 +17,7 @@ async function chatAnthropic({ system, user, model }) {
   const client = getAnthropicClient();
   if (!client) {
     const error = new Error("ANTHROPIC_API_KEY no está definida.");
-    error.code = "PROVIDER_KEY_MISSING";
+    (error as any).code = "PROVIDER_KEY_MISSING";
     throw error;
   }
   const response = await client.messages.create({
@@ -38,7 +38,7 @@ async function chatOpenAI({ system, user, model }) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     const error = new Error("OPENAI_API_KEY no está definida.");
-    error.code = "PROVIDER_KEY_MISSING";
+    (error as any).code = "PROVIDER_KEY_MISSING";
     throw error;
   }
   const usedModel = model || OPENAI_DEFAULT;
@@ -61,7 +61,7 @@ async function chatOpenAI({ system, user, model }) {
   if (!response.ok) {
     const body = await response.text();
     const error = new Error(`OpenAI ${response.status}: ${body.slice(0, 200)}`);
-    error.code = "PROVIDER_HTTP_ERROR";
+    (error as any).code = "PROVIDER_HTTP_ERROR";
     throw error;
   }
   const data = await response.json();
@@ -73,7 +73,7 @@ async function chatGoogle({ system, user, model }) {
   const apiKey = process.env.GOOGLE_API_KEY;
   if (!apiKey) {
     const error = new Error("GOOGLE_API_KEY no está definida.");
-    error.code = "PROVIDER_KEY_MISSING";
+    (error as any).code = "PROVIDER_KEY_MISSING";
     throw error;
   }
   const usedModel = model || GOOGLE_DEFAULT;
@@ -93,7 +93,7 @@ async function chatGoogle({ system, user, model }) {
   if (!response.ok) {
     const body = await response.text();
     const error = new Error(`Google ${response.status}: ${body.slice(0, 200)}`);
-    error.code = "PROVIDER_HTTP_ERROR";
+    (error as any).code = "PROVIDER_HTTP_ERROR";
     throw error;
   }
   const data = await response.json();
@@ -126,7 +126,7 @@ export async function callProvider(providerName, { system, user, model }) {
   const provider = PROVIDERS[providerName];
   if (!provider) {
     const error = new Error(`Proveedor desconocido: ${providerName}`);
-    error.code = "UNKNOWN_PROVIDER";
+    (error as any).code = "UNKNOWN_PROVIDER";
     throw error;
   }
   const started = Date.now();

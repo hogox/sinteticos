@@ -1,10 +1,10 @@
 import { simulateRun } from "../shared/simulation.js";
-import { uid } from "./utils.mjs";
-import { buildFrameDebugDataUrl } from "./frame-detection.mjs";
+import { uid } from "./utils.ts";
+import { buildFrameDebugDataUrl } from "./frame-detection.ts";
 
-export function buildErrorRun(task, persona, iteration, error, overrides = {}) {
+export function buildErrorRun(task: any, persona: any, iteration: number, error: any, overrides: any = {}) {
   const errorMessage = error instanceof Error ? error.message : String(error);
-  const fallback = simulateRun(task, persona, iteration, {
+  const fallback: any = simulateRun(task, persona, iteration, {
     uid,
     overrides: {
       engine: overrides.engine || "server-error",
@@ -46,8 +46,8 @@ export function buildErrorRun(task, persona, iteration, error, overrides = {}) {
   return fallback;
 }
 
-export function buildRecoveredErrorRun(task, persona, iteration, error, context, overrides = {}) {
-  const fallback = buildErrorRun(task, persona, iteration, error, overrides);
+export function buildRecoveredErrorRun(task: any, persona: any, iteration: number, error: any, context: any, overrides: any = {}) {
+  const fallback: any = buildErrorRun(task, persona, iteration, error, overrides);
   fallback.click_points = context.clickPoints || [];
   fallback.screen_transitions = context.screenTransitions || [];
   fallback.observed_heatmaps = [{ screen: context.currentScreen || fallback.report_details.primary_screen || "Run bootstrap", points: fallback.click_points }];

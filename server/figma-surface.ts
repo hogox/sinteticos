@@ -8,11 +8,11 @@ import {
   DEFAULT_GOTO_TIMEOUT_MS,
   DEFAULT_STARTUP_GRACE_MS,
   DEFAULT_BLIND_WAKE_POINTS
-} from "./config.mjs";
-import { escapeRegExp } from "./utils.mjs";
-import { safeGetScreenLabel, safeCaptureScreenshot } from "./page-inspect.mjs";
-import { writeFrameDebugArtifact } from "./frame-detection.mjs";
-import { collectCandidates } from "./candidates.mjs";
+} from "./config.ts";
+import { escapeRegExp } from "./utils.ts";
+import { safeGetScreenLabel, safeCaptureScreenshot } from "./page-inspect.ts";
+import { writeFrameDebugArtifact } from "./frame-detection.ts";
+import { collectCandidates } from "./candidates.ts";
 import {
   composePersonaResponse,
   summarizeRun,
@@ -46,7 +46,7 @@ export async function prepareFigmaSurface(page) {
       try {
         await locator.click({ timeout: 1200 });
         await page.waitForTimeout(500);
-      } catch (error) {
+      } catch (error: any) {
       }
     }
   }
@@ -58,7 +58,7 @@ export async function prepareFigmaSurface(page) {
       await cookieFallback.click({ timeout: 1200 });
       await page.waitForTimeout(500);
     }
-  } catch (error) {
+  } catch (error: any) {
   }
 
   // Search for cookie buttons inside iframes (Figma embeds)
@@ -76,13 +76,13 @@ export async function prepareFigmaSurface(page) {
         }
       }
     }
-  } catch (error) {
+  } catch (error: any) {
   }
 
 }
 
 export async function settleFigmaSurface(page, deadline, timing = resolveNavigationTiming(), task = {}) {
-  const { getInteractionFrame } = await import("./figma-advanced.mjs");
+  const { getInteractionFrame } = await import("./figma-advanced.ts");
   const surfaceDeadline = Math.min(deadline, Date.now() + timing.surfaceTimeoutMs);
   for (let attempt = 0; attempt < 6; attempt += 1) {
     if (Date.now() >= surfaceDeadline) {
@@ -97,7 +97,7 @@ export async function settleFigmaSurface(page, deadline, timing = resolveNavigat
           try {
             await restartLocator.click({ timeout: 1200 });
             await page.waitForTimeout(timing.interactiveWaitMs);
-          } catch (error) {
+          } catch (error: any) {
           }
         }
       }
@@ -115,7 +115,7 @@ export async function settleFigmaSurface(page, deadline, timing = resolveNavigat
           await restartLocator.click({ timeout: 1200 });
           await page.waitForTimeout(timing.interactiveWaitMs);
           continue;
-        } catch (error) {
+        } catch (error: any) {
         }
       }
     }
@@ -188,7 +188,7 @@ export async function hasMeaningfulInteractiveTargets(page, interactionFrame = n
 }
 
 export async function buildBlockedRun(task, persona, startedAt, seed, runId, rng, reason, executionNotes, runDir, page) {
-  const { getInteractionFrame, safeViewportSize } = await import("./figma-advanced.mjs");
+  const { getInteractionFrame, safeViewportSize } = await import("./figma-advanced.ts");
   const screen = await safeGetScreenLabel(page, 1);
   const screenshots = [];
   const debugArtifacts = [];
@@ -247,7 +247,7 @@ export async function buildBlockedRun(task, persona, startedAt, seed, runId, rng
   };
 }
 
-export function resolveNavigationTiming(task = {}) {
+export function resolveNavigationTiming(task: any = {}) {
   const overrides = task.navigation_overrides || {};
   return {
     runTimeoutMs: sanitizeTimeout(overrides.run_timeout_ms, DEFAULT_RUN_TIMEOUT_MS, 15000, 180000),

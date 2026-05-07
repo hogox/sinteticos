@@ -1,8 +1,8 @@
 import path from "node:path";
 import { promises as fs } from "node:fs";
-import { ARTIFACTS_DIR, BROWSER_HEADLESS, ABSOLUTE_MAX_STEPS } from "./config.mjs";
-import { isFigmaUrl } from "./url-utils.mjs";
-import { uid } from "./utils.mjs";
+import { ARTIFACTS_DIR, BROWSER_HEADLESS, ABSOLUTE_MAX_STEPS } from "./config.ts";
+import { isFigmaUrl } from "./url-utils.ts";
+import { uid } from "./utils.ts";
 import { hashString, mulberry32 } from "../shared/utils.js";
 import {
   composePersonaResponse,
@@ -12,14 +12,14 @@ import {
   buildPredictedPoints,
   buildPredictiveNotes
 } from "../shared/reporting.js";
-import { safeFingerprintPage, safeCaptureScreenshot, safeGetScreenLabel } from "./page-inspect.mjs";
-import { writeFrameDebugArtifact } from "./frame-detection.mjs";
-import { collectCandidates, chooseCandidate } from "./candidates.mjs";
+import { safeFingerprintPage, safeCaptureScreenshot, safeGetScreenLabel } from "./page-inspect.ts";
+import { writeFrameDebugArtifact } from "./frame-detection.ts";
+import { collectCandidates, chooseCandidate } from "./candidates.ts";
 import {
   settleFigmaSurface,
   buildBlockedRun,
   resolveNavigationTiming
-} from "./figma-surface.mjs";
+} from "./figma-surface.ts";
 import {
   extendFigmaStartupWindow,
   attemptBlindWakeSequence,
@@ -27,10 +27,10 @@ import {
   refineFrameByPixelAnalysis,
   looksSuccessful,
   safeViewportSize
-} from "./figma-advanced.mjs";
-import { buildRecoveredErrorRun } from "./error-runs.mjs";
+} from "./figma-advanced.ts";
+import { buildRecoveredErrorRun } from "./error-runs.ts";
 import { simulateRun } from "../shared/simulation.js";
-import { isVisionAvailable, analyzeScreenWithVision, mapVisionCoordsToPage } from "./vision.mjs";
+import { isVisionAvailable, analyzeScreenWithVision, mapVisionCoordsToPage } from "./vision.ts";
 
 const CLOUDFLARE_RE = /just a moment|managed challenge|un momento|checking your browser|enable javascript and cookies/i;
 
@@ -50,7 +50,7 @@ async function waitForCloudflare(page, extraWaitMs = 1000) {
   }
 }
 
-export async function executeNavigationRun(task, persona, iteration, playwright, options = {}) {
+export async function executeNavigationRun(task: any, persona: any, iteration: number, playwright: any, options: any = {}) {
   const project = options.project || null;
   if (!playwright) {
     return simulateRun(task, persona, iteration, {
@@ -81,7 +81,7 @@ export async function executeNavigationRun(task, persona, iteration, playwright,
   await fs.mkdir(runDir, { recursive: true });
   const timing = resolveNavigationTiming(task);
   const deadline = Date.now() + timing.runTimeoutMs;
-  const context = {
+  const context: any = {
     currentScreen: "Run bootstrap",
     screenshots,
     stepLog,
@@ -114,9 +114,10 @@ export async function executeNavigationRun(task, persona, iteration, playwright,
       // Basic stealth: hide webdriver flag read by Cloudflare and other bot-detection scripts
       await page.addInitScript(() => {
         Object.defineProperty(navigator, "webdriver", { get: () => undefined });
-        delete window.cdc_adoQpoasnfa76pfcZLmcfl_Array;
-        delete window.cdc_adoQpoasnfa76pfcZLmcfl_Promise;
-        delete window.cdc_adoQpoasnfa76pfcZLmcfl_Symbol;
+        const w = window as any;
+        delete w.cdc_adoQpoasnfa76pfcZLmcfl_Array;
+        delete w.cdc_adoQpoasnfa76pfcZLmcfl_Promise;
+        delete w.cdc_adoQpoasnfa76pfcZLmcfl_Symbol;
       });
     }
     let navUrl = task.url;
@@ -254,7 +255,7 @@ export async function executeNavigationRun(task, persona, iteration, playwright,
       if (useVision) {
         try {
           const visionClip = activeFrame || context.interactionFrame;
-          const visionScreenshotOpts = { type: "png" };
+          const visionScreenshotOpts: any = { type: "png" };
           if (visionClip && visionClip.confidence > 0.3 && visionClip.left >= 0 && visionClip.width > 100 && visionClip.height > 200) {
             visionScreenshotOpts.clip = {
               x: visionClip.left, y: visionClip.top,
@@ -491,7 +492,7 @@ export async function executeNavigationRun(task, persona, iteration, playwright,
     let lighthouseData = null;
     if (task.lighthouse_enabled && task.url) {
       try {
-        const { runLighthouse } = await import("./lighthouse-runner.mjs");
+        const { runLighthouse } = await import("./lighthouse-runner.ts");
         const formFactor = isFigma ? "mobile" : (task.lighthouse_form_factor || "desktop");
         lighthouseData = await runLighthouse(task.url, { formFactor });
       } catch (lhError) {
@@ -547,7 +548,7 @@ export async function executeNavigationRun(task, persona, iteration, playwright,
       source: "server-playwright",
       lighthouse: lighthouseData
     };
-  } catch (error) {
+  } catch (error: any) {
     const fallback = buildRecoveredErrorRun(task, persona, iteration, error, context, {
       engine: "playwright-error",
       source: "server",

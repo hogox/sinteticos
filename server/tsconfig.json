@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": false,
+    "noImplicitAny": false,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
+    "useUnknownInCatchVariables": false,
+    "types": ["node"]
+  },
+  "include": ["./**/*.ts", "../shared/*.ts", "../skills/_runtime/*.ts", "../server.ts", "../figma-mcp-client.ts"]
+}
