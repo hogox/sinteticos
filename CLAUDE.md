@@ -5,18 +5,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```sh
-npm install              # Install root deps
+npm install              # Install root deps (includes typescript for shared/)
 npm run web:install      # Install web/ frontend deps
-npm run dev              # Backend (:8787) + web (:5173) via concurrently
-npm run server           # Backend only
+npm run dev              # shared:watch + backend (:8787) + web (:5173) via concurrently
+npm run server           # Backend only (consumes shared/*.js compiled output)
 npm run web              # Frontend only (proxies /api and /artifacts to :8787)
+npm run shared:build     # Compile shared/*.ts → shared/*.js + .d.ts (one-shot)
+npm run shared:watch     # Watch + recompile on change
+npm run shared:typecheck # Type-check shared/ without emit
 npm run web:typecheck    # Type-check frontend
-npm run web:build        # Build frontend for production
+npm run web:build        # Build shared + frontend for production
 
 npx playwright install chromium  # Install browser binary for real navigation runs
 ```
 
-The legacy frontend in `index.html` + `src/*.js` + `styles.css` is being migrated to `web/` (Vite + React + TS + Tailwind + shadcn/ui). Both run in parallel during the migration. See `.claude/plans/` for the migration plan.
+The frontend lives in `web/` (Vite + React + TS + Tailwind + shadcn/ui). The legacy `index.html` + `src/*.js` + `styles.css` is preserved at `:8787` as a fallback during migration phases.
+
+`shared/` is TypeScript (Phase 4): `.ts` is the source of truth, `tsc` emits `.js` + `.d.ts` co-located. The web app imports `.ts` via Vite; the Node server and legacy frontend import the compiled `.js`. Run `npm run shared:build` before any `git pull` that adds new `.ts` files, or use `npm run dev` which keeps the watcher running.
 
 ## Architecture
 
