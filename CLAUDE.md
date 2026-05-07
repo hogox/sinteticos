@@ -5,12 +5,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```sh
-npm run dev        # Start server on http://localhost:8787
-npm install        # Install dependencies
+npm install              # Install root deps
+npm run web:install      # Install web/ frontend deps
+npm run dev              # Backend (:8787) + web (:5173) via concurrently
+npm run server           # Backend only
+npm run web              # Frontend only (proxies /api and /artifacts to :8787)
+npm run web:typecheck    # Type-check frontend
+npm run web:build        # Build frontend for production
+
 npx playwright install chromium  # Install browser binary for real navigation runs
 ```
 
-No build step, no test runner, no linter configured.
+The legacy frontend in `index.html` + `src/*.js` + `styles.css` is being migrated to `web/` (Vite + React + TS + Tailwind + shadcn/ui). Both run in parallel during the migration. See `.claude/plans/` for the migration plan.
 
 ## Architecture
 
