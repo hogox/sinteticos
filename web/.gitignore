@@ -1,0 +1,6 @@
+node_modules
+dist
+.vite
+src/routeTree.gen.ts
+.vite-tsbuild
+*.tsbuildinfo

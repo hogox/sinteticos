@@ -4,8 +4,15 @@
     {
       "name": "sinteticos-lab",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": ["run", "server"],
       "port": 8787,
+      "autoPort": false
+    },
+    {
+      "name": "sinteticos-web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "web"],
+      "port": 5173,
       "autoPort": false
     }
   ]
