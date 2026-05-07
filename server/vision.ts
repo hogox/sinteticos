@@ -6,7 +6,7 @@ import {
   VISION_API_URL,
   VISION_RETRY_DELAY_MS,
   VISION_SPEND_LIMIT_USD
-} from "./config.mjs";
+} from "./config.ts";
 
 // In-memory spend tracker (resets on server restart)
 let totalSpendUsd = 0;
@@ -174,20 +174,20 @@ function parseVisionResponse(raw) {
       relevance: Math.max(0, Math.min(100, Number(obj.relevance) || 50)),
       emotion,
       taskComplete: action === "complete" || Boolean(obj.taskComplete)
-    };
+    } as any;
     if (action === "click") {
       if (typeof obj.x !== "number" || typeof obj.y !== "number") return null;
       result.x = Math.round(obj.x);
       result.y = Math.round(obj.y);
     }
     return result;
-  } catch (error) {
+  } catch (error: any) {
     console.error("[vision] JSON parse failed:", error.message, "raw:", text.slice(0, 200));
     return null;
   }
 }
 
-function callClaudeAPI(body) {
+function callClaudeAPI(body: any): Promise<any> {
   return new Promise((resolve, reject) => {
     const url = new URL("/v1/messages", VISION_API_URL);
     const payload = JSON.stringify(body);
@@ -277,7 +277,7 @@ export async function analyzeScreenWithVision(screenshotBuffer, context) {
       }
       console.log("[vision] Claude response:", text.slice(0, 200));
       return parseVisionResponse(text);
-    } catch (error) {
+    } catch (error: any) {
       lastError = error;
       console.error(`[vision] Attempt ${attempt + 1} failed:`, error.message);
       if (error.message.includes("429") && attempt === 0) {
@@ -356,7 +356,7 @@ export async function analyzeFirstImpression(screenshotBuffer, context) {
       taskRelevance: Math.max(0, Math.min(100, Number(obj.taskRelevance) || 50)),
       understoodPurpose: String(obj.understoodPurpose || "").slice(0, 120)
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error("[vision/firstImpression]", error.message);
     return null;
   }

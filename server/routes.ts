@@ -1,11 +1,11 @@
 import path from "node:path";
-import { PROJECT_ROOT } from "./config.mjs";
-import { checkFigmaAvailability } from "../figma-mcp-client.mjs";
-import { generatePersonas, extractPersonas, generatePersonaChatReply } from "./anthropic.mjs";
-import { parseMultipart, MAX_TOTAL_BYTES } from "./multipart.mjs";
-import { parseFile, fetchAndParseUrl } from "./parsers.mjs";
-import { loadSkillRegistry, listSkills, getSkill } from "../skills/_runtime/loader.mjs";
-import { runSkill, getRuntimeStatus } from "../skills/_runtime/executor.mjs";
+import { PROJECT_ROOT } from "./config.ts";
+import { checkFigmaAvailability } from "../figma-mcp-client.ts";
+import { generatePersonas, extractPersonas, generatePersonaChatReply } from "./anthropic.ts";
+import { parseMultipart, MAX_TOTAL_BYTES } from "./multipart.ts";
+import { parseFile, fetchAndParseUrl } from "./parsers.ts";
+import { loadSkillRegistry, listSkills, getSkill } from "../skills/_runtime/loader.ts";
+import { runSkill, getRuntimeStatus } from "../skills/_runtime/executor.ts";
 
 export function createRouteHandler(deps) {
   const { readState, writeState, readJson, serveFile, sendJson, uid, safeExecuteRun, getPlaywright, buildInitialState } = deps;
@@ -59,7 +59,7 @@ export function createRouteHandler(deps) {
         try {
           const personas = await generatePersonas(payload.description, payload.quantity);
           return sendJson(res, 200, { personas });
-        } catch (error) {
+        } catch (error: any) {
           const status = error.code === "ANTHROPIC_KEY_MISSING" ? 503 : error.code === "INVALID_INPUT" ? 400 : 502;
           return sendJson(res, status, { error: error.message, code: error.code || "ANTHROPIC_ERROR" });
         }
@@ -70,7 +70,7 @@ export function createRouteHandler(deps) {
         try {
           const personas = await extractPersonas(payload.source_text, payload.quantity);
           return sendJson(res, 200, { personas });
-        } catch (error) {
+        } catch (error: any) {
           const status = error.code === "ANTHROPIC_KEY_MISSING" ? 503 : error.code === "INVALID_INPUT" ? 400 : 502;
           return sendJson(res, status, { error: error.message, code: error.code || "ANTHROPIC_ERROR" });
         }
@@ -78,7 +78,7 @@ export function createRouteHandler(deps) {
 
       if (url.pathname === "/api/personas/ai-extract-multi" && req.method === "POST") {
         try {
-          const { files, fields } = await parseMultipart(req);
+          const { files, fields } = (await parseMultipart(req)) as { files: any[]; fields: any };
           const quantity = Number(fields.quantity) || 3;
           const pastedText = String(fields.text || fields.pasted_text || "").trim();
           const urlsRaw = fields.urls || [];
@@ -97,7 +97,7 @@ export function createRouteHandler(deps) {
               try {
                 const parsed = await parseFile(file);
                 return { ok: true, ...parsed };
-              } catch (error) {
+              } catch (error: any) {
                 return { ok: false, source: file.filename, kind: "file", error: error.message };
               }
             })
@@ -114,13 +114,13 @@ export function createRouteHandler(deps) {
                   text: parsed.text,
                   meta: { title: parsed.title, status: parsed.status }
                 };
-              } catch (error) {
+              } catch (error: any) {
                 return { ok: false, source: link, kind: "url", error: error.message };
               }
             })
           );
 
-          const sources = [...fileResults, ...urlResults];
+          const sources: any[] = [...fileResults, ...urlResults];
           if (pastedText) {
             sources.push({ ok: true, source: "texto pegado", kind: "text", text: pastedText, meta: { bytes: pastedText.length } });
           }
@@ -166,7 +166,7 @@ export function createRouteHandler(deps) {
               chars: truncated.length
             }
           });
-        } catch (error) {
+        } catch (error: any) {
           const status = error.status || (error.code === "ANTHROPIC_KEY_MISSING" ? 503 : error.code === "INVALID_INPUT" ? 400 : 502);
           return sendJson(res, status, { error: error.message, code: error.code || "MULTI_EXTRACT_ERROR" });
         }
@@ -352,10 +352,10 @@ export function createRouteHandler(deps) {
           evidence_mode: reply.evidence_mode,
           reasoning_note: reply.reasoning_note,
           citations: reply.citations,
-          verdict: reply.verdict || null,
-          verdict_reason: reply.verdict_reason || null,
-          conditions: reply.conditions || null,
-          frictions: reply.frictions || null,
+          verdict: (reply as any).verdict || null,
+          verdict_reason: (reply as any).verdict_reason || null,
+          conditions: (reply as any).conditions || null,
+          frictions: (reply as any).frictions || null,
           created_at: new Date().toISOString()
         };
         // Auto-titular hipótesis con la primera pregunta del usuario.
@@ -541,10 +541,10 @@ export function createRouteHandler(deps) {
               created_at: new Date().toISOString()
             });
             await writeState(state);
-            result.analysis_id = analysisId;
+            (result as any).analysis_id = analysisId;
           }
           return sendJson(res, 200, result);
-        } catch (error) {
+        } catch (error: any) {
           const status = error.code === "PROVIDER_KEY_MISSING" || error.code === "NO_PROVIDER" ? 503 : 502;
           return sendJson(res, status, { ok: false, error: error.message, code: error.code || "SKILL_ERROR" });
         }
@@ -576,7 +576,7 @@ export function createRouteHandler(deps) {
       }
 
       return sendJson(res, 404, { error: "Not found" });
-    } catch (error) {
+    } catch (error: any) {
       return sendJson(res, 500, { error: error.message });
     }
   };

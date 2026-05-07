@@ -6,12 +6,12 @@ import http from "node:http";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, "../.env.local"), override: true });
 
-import { PORT } from "./config.mjs";
-import { ensurePaths, ensureState, readState, writeState, readJson, serveFile, sendJson } from "./persistence.mjs";
-import { uid } from "./utils.mjs";
-import { safeExecuteRun, getPlaywright } from "./runner.mjs";
+import { PORT } from "./config.ts";
+import { ensurePaths, ensureState, readState, writeState, readJson, serveFile, sendJson } from "./persistence.ts";
+import { uid } from "./utils.ts";
+import { safeExecuteRun, getPlaywright } from "./runner.ts";
 import { buildInitialState } from "../shared/seed-data.js";
-import { createRouteHandler } from "./routes.mjs";
+import { createRouteHandler } from "./routes.ts";
 
 await ensurePaths();
 await ensureState(() => buildInitialState(uid));

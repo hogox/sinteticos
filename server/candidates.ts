@@ -1,4 +1,4 @@
-import { tokenize } from "./utils.mjs";
+import { tokenize } from "./utils.ts";
 
 function extractPersonaBiases(persona) {
   const behaviorText = `${persona.digital_behavior || ""} ${persona.behaviors || ""} ${persona.personality_traits || ""}`;
@@ -33,7 +33,7 @@ export async function collectCandidates(page, interactionFrame = null, { isFigma
     const seen = new Set();
     const nodes = Array.from(document.querySelectorAll(selectors.join(",")));
     return nodes
-      .map((node) => {
+      .map((node: any) => {
         const rect = node.getBoundingClientRect();
         const text = (node.innerText || node.getAttribute("aria-label") || node.getAttribute("title") || "").trim();
         const key = `${Math.round(rect.x)},${Math.round(rect.y)},${text.slice(0, 20)}`;

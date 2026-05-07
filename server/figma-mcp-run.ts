@@ -1,7 +1,7 @@
 import path from "node:path";
 import { promises as fs } from "node:fs";
-import { ARTIFACTS_DIR, ABSOLUTE_MAX_STEPS } from "./config.mjs";
-import { uid } from "./utils.mjs";
+import { ARTIFACTS_DIR, ABSOLUTE_MAX_STEPS } from "./config.ts";
+import { uid } from "./utils.ts";
 import { hashString, mulberry32 } from "../shared/utils.js";
 import {
   composePersonaResponse,
@@ -11,8 +11,8 @@ import {
   buildPredictedPoints,
   buildPredictiveNotes
 } from "../shared/reporting.js";
-import { chooseCandidate } from "./candidates.mjs";
-import { executeNavigationRun } from "./navigation-run.mjs";
+import { chooseCandidate } from "./candidates.ts";
+import { executeNavigationRun } from "./navigation-run.ts";
 import {
   parseFigmaPrototypeUrl,
   getFrameNodes,
@@ -20,7 +20,7 @@ import {
   nodesToCandidates,
   findTransitionTarget,
   enrichWithTransitions
-} from "../figma-mcp-client.mjs";
+} from "../figma-mcp-client.ts";
 import { simulateRun } from "../shared/simulation.js";
 
 export async function executeMcpNavigationRun(task, persona, iteration, accessToken, playwright) {
@@ -279,7 +279,7 @@ export async function executeMcpNavigationRun(task, persona, iteration, accessTo
       mcp_enabled: true,
       source: "server-mcp"
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error("MCP navigation run failed:", error.message);
     return mcpFallbackToPlaywright(task, persona, iteration, playwright, `MCP fallo: ${error.message}`);
   }

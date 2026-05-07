@@ -242,8 +242,10 @@ function inferLocalHypothesisVerdict(persona: ChatPersona, message: string): Hyp
 
 interface BuildLocalReplyArgs {
   persona: ChatPersona;
+  project?: ChatProject | null;
   tasks?: ChatTask[];
   runs?: ChatRun[];
+  history?: ChatHistoryMessage[];
   message?: string;
   mode?: "free" | "evidence";
   anchorRunId?: string | null;

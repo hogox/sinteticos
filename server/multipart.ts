@@ -103,8 +103,8 @@ export function parseMultipart(req) {
   });
 }
 
-function makeError(code, message, status) {
-  const err = new Error(message);
+function makeError(code: string, message: string, status?: number) {
+  const err: any = new Error(message);
   err.code = code;
   err.status = status || 400;
   return err;

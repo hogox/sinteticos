@@ -1,6 +1,6 @@
 import path from "node:path";
 import { promises as fs } from "node:fs";
-import { execFile, VISUAL_FRAME_DETECTION_TIMEOUT_MS } from "./config.mjs";
+import { execFile, VISUAL_FRAME_DETECTION_TIMEOUT_MS } from "./config.ts";
 import { escapeXml } from "../shared/utils.js";
 
 export async function detectVisualMobileFrame(page) {
@@ -74,15 +74,15 @@ result = {
 }
 print(json.dumps(result))
 `;
-    const { stdout } = await withTimeout(
+    const { stdout } = (await withTimeout(
       execFile("python3", ["-c", script], {
         input: screenshot,
         maxBuffer: 1024 * 1024 * 10,
         timeout: VISUAL_FRAME_DETECTION_TIMEOUT_MS
-      }),
+      } as any),
       VISUAL_FRAME_DETECTION_TIMEOUT_MS + 200,
       "visual-frame-python-timeout"
-    );
+    )) as any;
     const raw = String(stdout || "").trim();
     if (!raw || raw === "null") {
       return null;
@@ -92,7 +92,7 @@ print(json.dumps(result))
       return null;
     }
     return parsed;
-  } catch (error) {
+  } catch (error: any) {
     return null;
   }
 }

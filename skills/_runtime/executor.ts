@@ -1,5 +1,5 @@
-import { getSkill, loadSkillRegistry } from "./loader.mjs";
-import { callProvider, getDefaultProvider, listAvailableProviders } from "./providers.mjs";
+import { getSkill, loadSkillRegistry } from "./loader.ts";
+import { callProvider, getDefaultProvider, listAvailableProviders } from "./providers.ts";
 
 function pickRunFields(run) {
   if (!run) return null;
@@ -59,9 +59,9 @@ function pickTaskFields(task) {
   };
 }
 
-function buildUserPayload(skill, { runs, persona, task, project, calibrations }) {
+function buildUserPayload(skill: any, { runs, persona, task, project, calibrations }: any) {
   const inputs = Array.isArray(skill.inputs) ? skill.inputs : [];
-  const payload = {
+  const payload: any = {
     skill: skill.name
   };
   if (inputs.includes("task") || skill.batch === false) payload.task = pickTaskFields(task);
@@ -159,24 +159,24 @@ function validateAgainstSchema(value, schema) {
   return { ok: errors.length === 0, errors };
 }
 
-export async function runSkill(name, payload, { provider } = {}) {
+export async function runSkill(name: string, payload: any, { provider }: { provider?: string } = {}) {
   const registry = await loadSkillRegistry();
   const skill = getSkill(registry, name);
   if (!skill) {
     const error = new Error(`Skill no encontrado: ${name}`);
-    error.code = "SKILL_NOT_FOUND";
+    (error as any).code = "SKILL_NOT_FOUND";
     throw error;
   }
 
   const chosenProvider = provider || getDefaultProvider();
   if (!chosenProvider) {
     const error = new Error("No hay proveedores LLM configurados (define ANTHROPIC_API_KEY, OPENAI_API_KEY o GOOGLE_API_KEY).");
-    error.code = "NO_PROVIDER";
+    (error as any).code = "NO_PROVIDER";
     throw error;
   }
   if (skill.providers.length && !skill.providers.includes(chosenProvider)) {
     const error = new Error(`El skill ${name} no soporta el proveedor ${chosenProvider}.`);
-    error.code = "PROVIDER_NOT_SUPPORTED";
+    (error as any).code = "PROVIDER_NOT_SUPPORTED";
     throw error;
   }
 

@@ -1,7 +1,7 @@
 import path from "node:path";
 import { promises as fs } from "node:fs";
-import { DATA_DIR, ARTIFACTS_DIR, STATE_FILE } from "./config.mjs";
-import { uid } from "./utils.mjs";
+import { DATA_DIR, ARTIFACTS_DIR, STATE_FILE } from "./config.ts";
+import { uid } from "./utils.ts";
 
 export async function ensurePaths() {
   await fs.mkdir(DATA_DIR, { recursive: true });
@@ -11,7 +11,7 @@ export async function ensurePaths() {
 export async function ensureState(buildInitialState) {
   try {
     await fs.access(STATE_FILE);
-  } catch (error) {
+  } catch (error: any) {
     await writeState(buildInitialState());
   }
 }

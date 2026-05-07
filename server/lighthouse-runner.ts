@@ -1,5 +1,5 @@
-import { LIGHTHOUSE_ENABLED, LIGHTHOUSE_TIMEOUT_MS } from "./config.mjs";
-import { getPlaywright } from "./runner.mjs";
+import { LIGHTHOUSE_ENABLED, LIGHTHOUSE_TIMEOUT_MS } from "./config.ts";
+import { getPlaywright } from "./runner.ts";
 
 const KEY_AUDITS = [
   "first-contentful-paint",
@@ -21,8 +21,8 @@ export async function runLighthouse(url, { formFactor = "desktop" } = {}) {
       import("lighthouse"),
       import("chrome-launcher")
     ]);
-    lighthouse = lhMod.default;
-    chromeLauncher = clMod.default ?? clMod;
+    lighthouse = (lhMod as any).default;
+    chromeLauncher = (clMod as any).default ?? clMod;
   } catch {
     console.warn("[lighthouse] Packages not installed — skipping audit.");
     return null;
@@ -65,7 +65,7 @@ export async function runLighthouse(url, { formFactor = "desktop" } = {}) {
 
     if (!result || !result.lhr) return null;
     return normalizeLighthouseResult(result.lhr);
-  } catch (error) {
+  } catch (error: any) {
     console.error("[lighthouse] Error durante auditoria:", error.message);
     return null;
   } finally {

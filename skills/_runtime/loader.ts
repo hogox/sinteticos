@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SKILLS_DIR = path.resolve(__dirname, "..");
 
-function parseFrontmatter(raw) {
+function parseFrontmatter(raw: string): { meta: any; body: string } {
   const match = raw.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
   if (!match) {
     return { meta: {}, body: raw };
@@ -13,10 +13,10 @@ function parseFrontmatter(raw) {
   return { meta: parseYaml(match[1]), body: match[2].trim() };
 }
 
-function parseYaml(text) {
+function parseYaml(text: string): any {
   const lines = text.split(/\r?\n/);
-  const root = {};
-  const stack = [{ indent: -1, container: root, key: null }];
+  const root: any = {};
+  const stack: Array<{ indent: number; container: any; key: string | null }> = [{ indent: -1, container: root, key: null }];
 
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i];
