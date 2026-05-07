@@ -25,6 +25,7 @@
           "label": { "type": "string" },
           "detail": { "type": "string" },
           "evidence_screens": { "type": "array", "items": { "type": "string" } },
+          "framework_citation": { "type": "string" },
           "recommendation": { "type": "string" }
         }
       }

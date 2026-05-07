@@ -160,6 +160,13 @@
 
             <div class="metrics-grid" id="metrics-grid"></div>
 
+            <section class="quality-metrics">
+              <h3 class="section-eyebrow">Calidad sintética y feedback</h3>
+              <div class="metrics-grid" id="quality-metrics-grid"></div>
+            </section>
+
+            <section class="prompt-tuner-section" id="prompt-tuner-section"></section>
+
             <div class="panel-grid">
               <article class="panel">
                 <div class="panel-header">
@@ -306,7 +313,7 @@
         </section>
 
         <section class="section" id="section-runs" aria-label="Resultados de corridas">
-          <div class="section-grid">
+          <div class="runs-stack">
             <article class="panel">
               <div class="panel-header">
                 <div>
@@ -315,7 +322,6 @@
                 </div>
               </div>
               <div class="stacked-list" id="run-list"></div>
-              <div id="run-batch-panel"></div>
             </article>
 
             <article class="panel">
@@ -324,18 +330,23 @@
                   <p class="eyebrow">Run detail</p>
                   <h3 id="run-detail-title">Selecciona una corrida</h3>
                 </div>
-                <div class="pill-row">
-                  <button class="pill-button is-active" data-detail-view="observed" title="Evidencia real del run: screenshots, clicks, scanpath y pasos.">Observed</button>
-                  <button class="pill-button" data-detail-view="inferred" title="Interpretacion analitica del sistema basada en la evidencia observada.">Inferred</button>
-                  <button class="pill-button" data-detail-view="predictive" title="Estimacion visual de atencion. No es eye tracking real.">Predictive</button>
-                </div>
               </div>
-              <div class="run-legend">
-                <span><strong>Observed:</strong> evidencia</span>
-                <span><strong>Inferred:</strong> interpretacion</span>
-                <span><strong>Predictive:</strong> prediccion</span>
+              <div class="run-tabs" role="tablist">
+                <button class="run-tabs__tab is-active" data-detail-view="observed" title="Evidencia real del run: screenshots, clicks, scanpath y pasos.">Observed<span class="run-tabs__hint">evidencia</span></button>
+                <button class="run-tabs__tab" data-detail-view="inferred" title="Interpretacion analitica del sistema basada en la evidencia observada.">Inferred<span class="run-tabs__hint">interpretación</span></button>
+                <button class="run-tabs__tab" data-detail-view="predictive" title="Estimacion visual de atencion. No es eye tracking real.">Predictive<span class="run-tabs__hint">predicción</span></button>
               </div>
               <div id="run-detail"></div>
+              <div class="skills-section" id="skills-section">
+                <div class="skills-section__header">
+                  <p class="eyebrow">Análisis con skills</p>
+                  <div class="skills-section__tabs" role="tablist">
+                    <button class="skills-section__tab is-active" data-skills-tab="run">Este run</button>
+                    <button class="skills-section__tab" data-skills-tab="batch">Todos los runs</button>
+                  </div>
+                </div>
+                <div id="skills-section-body"></div>
+              </div>
             </article>
           </div>
         </section>
@@ -475,13 +486,18 @@
             Tipo de experiencia
             <select name="type" id="task-type">
               <option value="navigation">Recorrido guiado</option>
+              <option value="five_second_test">Prueba de 5 segundos</option>
               <option value="idea">Exploración de idea</option>
             </select>
           </label>
           <label>Qué quieres que intente lograr<textarea name="prompt" rows="3" placeholder="Ej: encontrar un plan, entender una propuesta o completar una reserva" required></textarea></label>
           <label>URL del prototipo o contexto<input name="url" placeholder="https://..." /></label>
           <label>Cómo sabremos que le fue bien<textarea name="success_criteria" rows="2" placeholder="Ej: llega al final sin trabarse y entiende qué pasó"></textarea></label>
-          <label>Máximo de pasos<input type="number" min="2" max="12" name="max_steps" value="5" /></label>
+          <label class="checkbox-field">
+            <input type="checkbox" name="unlimited_steps" id="task-unlimited-steps" />
+            Sin máximo de pasos (la persona navega hasta completar o abandonar)
+          </label>
+          <label id="max-steps-field">Máximo de pasos<input type="number" min="2" max="12" name="max_steps" value="5" /></label>
           <label class="checkbox-field">
             <input type="checkbox" name="mcp_enabled" />
             Usar ayuda MCP cuando aplique
@@ -520,7 +536,14 @@
         <form id="project-form" class="form-grid">
           <input type="hidden" name="id" />
           <label>Nombre<input name="name" required /></label>
-          <label>Descripcion<textarea name="description" rows="4" placeholder="Contexto del proyecto"></textarea></label>
+          <label>Descripcion<textarea name="description" rows="3" placeholder="Contexto del proyecto"></textarea></label>
+          <fieldset class="context-fieldset">
+            <legend>Contexto del dominio (opcional, se inyecta en runs y skills)</legend>
+            <label>Brief del dominio<textarea name="domain_brief" rows="2" placeholder="Ej: Seguros de viaje LATAM, e-commerce B2C, banca para +50"></textarea></label>
+            <label>Restricciones de audiencia<textarea name="audience_constraints" rows="2" placeholder="Ej: +50 años, baja confianza digital, conectividad mixta"></textarea></label>
+            <label>Hallazgos previos (uno por línea)<textarea name="prior_findings" rows="3" placeholder="Ej:&#10;el botón 'Cotizar' confunde&#10;los planes son muy técnicos"></textarea></label>
+            <label>Cosas a evitar (uno por línea)<textarea name="do_not" rows="2" placeholder="Ej:&#10;no asumir conocimiento del producto&#10;no recomendar features que ya rechazamos"></textarea></label>
+          </fieldset>
           <div class="form-actions">
             <button type="submit">Guardar proyecto</button>
             <button type="button" class="ghost-button" id="project-reset">Limpiar</button>
@@ -645,6 +668,12 @@
       </header>
       <div class="chat-drawer__body" id="chat-drawer-body"></div>
     </aside>
+
+    <!-- Image lightbox -->
+    <div class="image-lightbox hidden" id="image-lightbox" aria-hidden="true">
+      <button class="image-lightbox__close" id="image-lightbox-close" aria-label="Cerrar zoom">×</button>
+      <img id="image-lightbox-img" alt="" />
+    </div>
 
     <script type="module" src="./src/main.js"></script>
   </body>

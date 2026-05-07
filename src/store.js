@@ -2,7 +2,9 @@ let state = { projects: [], personas: [], tasks: [], runs: [], calibrations: [] 
 let runtime = { mode: "loading", runner: "unknown", backend: false, mcp: "optional", skills: null };
 let skillsCache = {
   list: [], loaded: false, analyzing: false, lastResult: null, lastRunId: null, lastSkill: null,
-  lhAnalyzing: false, lhResult: null, lhRunId: null, lhView: "summary"
+  lhAnalyzing: false, lhResult: null, lhRunId: null, lhView: "summary",
+  evolving: null, evolveByPersona: {},
+  tuning: false, tunerResult: null
 };
 let ui = {
   section: "home",
@@ -23,6 +25,8 @@ let ui = {
   personaChatAnchorRunId: "",
   personaChatBusy: false,
   chatDrawer: { open: false, personaId: null, conversationId: null, mode: "chat" },
+  skillsDrawer: { open: false, tab: "run" },
+  lightboxSrc: null,
   personaDetailTab: "perfil",
   filters: {
     personaId: "all",

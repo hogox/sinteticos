@@ -2,6 +2,27 @@ import { drawVisualChrome, drawBackground, drawHeatPoints, drawScanPoints, loadS
 import { escapeHtml, severityToClass } from "./utils.js";
 import { getRuntime, getSkillsCache } from "./store.js";
 
+function renderScreenStep(item, run) {
+  const step = (run.step_log || []).find((s) => s.step === item.step);
+  const certainty = step ? `${step.certainty}% certeza` : "";
+  const action = step ? step.action : "";
+  const reason = step ? step.reason : "";
+  return `
+    <figure class="screens-stack__figure">
+      <img src="${item.src}" alt="${escapeHtml(item.screen)}" data-zoom-src="${item.src}" />
+      <figcaption class="screens-stack__caption">
+        <div class="screens-stack__caption-head">
+          <span class="screens-stack__step-pill">Paso ${item.step}</span>
+          <strong>${escapeHtml(item.screen)}</strong>
+          ${action ? `<span class="pill">${escapeHtml(action)}</span>` : ""}
+          ${certainty ? `<span class="pill">${certainty}</span>` : ""}
+        </div>
+        ${reason ? `<p class="screens-stack__reason">${escapeHtml(reason)}</p>` : ""}
+      </figcaption>
+    </figure>
+  `;
+}
+
 export function observedDetailHtml(run) {
   return `
     <div class="panel-grid">
@@ -22,49 +43,24 @@ export function observedDetailHtml(run) {
         </div>
       </div>
     </div>
-    <div class="run-detail-grid">
-      <div class="detail-card">
-        <div class="visual-stage">
-          <canvas id="run-heatmap" width="360" height="640"></canvas>
+    <div class="screens-stack">
+      <div class="visual-row">
+        <div class="detail-card">
+          <p class="eyebrow">Heatmap</p>
+          <div class="visual-stage">
+            <canvas id="run-heatmap" width="360" height="640" data-zoom-canvas="run-heatmap"></canvas>
+          </div>
+        </div>
+        <div class="detail-card">
+          <p class="eyebrow">Scanpath</p>
+          <div class="visual-stage">
+            <canvas id="run-scanpath" width="360" height="640" data-zoom-canvas="run-scanpath"></canvas>
+          </div>
         </div>
       </div>
-      <div class="detail-card">
-        <div class="visual-stage">
-          <canvas id="run-scanpath" width="360" height="640"></canvas>
-        </div>
-      </div>
-    </div>
-    <div class="panel-grid">
-      <div class="timeline-card">
-        <p class="eyebrow">Screens</p>
-        <div class="screens-grid">
-          ${(run.screenshots || [])
-            .map(
-              (item) => `
-                <figure>
-                  <img src="${item.src}" alt="${escapeHtml(item.screen)}" />
-                  <figcaption>${escapeHtml(item.screen)} · paso ${item.step}</figcaption>
-                </figure>
-              `
-            )
-            .join("")}
-        </div>
-      </div>
-      <div class="timeline-card">
-        <p class="eyebrow">Timeline</p>
-        <div class="timeline">
-          ${(run.step_log || [])
-            .map(
-              (step) => `
-                <div class="timeline-entry">
-                  <strong>Paso ${step.step} · ${escapeHtml(step.action)}</strong>
-                  <p>${escapeHtml(step.reason)}</p>
-                  <p>${escapeHtml(step.screen)} · ${step.certainty}% certeza</p>
-                </div>
-              `
-            )
-            .join("")}
-        </div>
+      <p class="eyebrow screens-stack__eyebrow">Recorrido</p>
+      <div class="screens-stack__list">
+        ${(run.screenshots || []).map((item) => renderScreenStep(item, run)).join("")}
       </div>
     </div>
     ${lighthousePanelHtml(run)}
@@ -197,6 +193,33 @@ export function skillBatchHtml(runs) {
   `;
 }
 
+function renderAnalysisFeedback(result) {
+  const fb = result.feedback || {};
+  const helpful = fb.helpful;
+  const accuracy = fb.accuracy || 0;
+  const surprised = !!fb.surprised_me;
+  const stars = [1, 2, 3, 4, 5].map((n) =>
+    `<button type="button" class="rating-star ${n <= accuracy ? "is-active" : ""}" data-rate-analysis="${result.analysis_id}" data-accuracy="${n}" aria-label="${n}">★</button>`
+  ).join("");
+  return `
+    <div class="analysis-feedback">
+      <span class="analysis-feedback__label">¿Te sirvió este análisis?</span>
+      <div class="analysis-feedback__row">
+        <button type="button" class="thumb ${helpful === true ? "is-active is-up" : ""}" data-rate-analysis="${result.analysis_id}" data-helpful="true" aria-label="Útil">👍</button>
+        <button type="button" class="thumb ${helpful === false ? "is-active is-down" : ""}" data-rate-analysis="${result.analysis_id}" data-helpful="false" aria-label="No útil">👎</button>
+        <span class="analysis-feedback__sep">·</span>
+        <span class="analysis-feedback__sub">Precisión:</span>
+        <span class="rating-stars">${stars}</span>
+        <span class="analysis-feedback__sep">·</span>
+        <label class="analysis-feedback__check">
+          <input type="checkbox" data-rate-analysis="${result.analysis_id}" data-surprise="true" ${surprised ? "checked" : ""}>
+          me sorprendió
+        </label>
+      </div>
+    </div>
+  `;
+}
+
 function renderSkillResult(result) {
   if (!result) return "";
   if (!result.ok) {
@@ -212,7 +235,7 @@ function renderSkillResult(result) {
     <span class="pill">${escapeHtml(result.provider)}</span>
     <span class="pill">${escapeHtml(result.model)}</span>
     <span class="pill">${result.latency_ms}ms</span>
-  </div>`;
+  </div>${result.analysis_id ? renderAnalysisFeedback(result) : ""}`;
 
   const output = result.output;
   let body = "";
@@ -358,7 +381,7 @@ function renderLighthouseAnalysis(result, view) {
     <span class="pill">${escapeHtml(result.provider)}</span>
     <span class="pill">${escapeHtml(result.model)}</span>
     <span class="pill">${result.latency_ms}ms</span>
-  </div>`;
+  </div>${result.analysis_id ? renderAnalysisFeedback(result) : ""}`;
 
   const verdictClass = output.overall_verdict === "pass"
     ? "completed"

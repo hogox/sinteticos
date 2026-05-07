@@ -1,6 +1,6 @@
 import path from "node:path";
 import { promises as fs } from "node:fs";
-import { ARTIFACTS_DIR } from "./config.mjs";
+import { ARTIFACTS_DIR, ABSOLUTE_MAX_STEPS } from "./config.mjs";
 import { uid } from "./utils.mjs";
 import { hashString, mulberry32 } from "../shared/utils.js";
 import {
@@ -69,7 +69,9 @@ export async function executeMcpNavigationRun(task, persona, iteration, accessTo
       }
     }
 
-    for (let step = 1; step <= (task.max_steps || 5); step += 1) {
+    const isUnlimited = task.max_steps == null || task.max_steps === 0;
+    const effectiveMax = isUnlimited ? ABSOLUTE_MAX_STEPS : task.max_steps;
+    for (let step = 1; step <= effectiveMax; step += 1) {
       const candidates = nodesToCandidates(frameData.nodes, frameData.frameWidth, frameData.frameHeight);
       const connectedCount = candidates.filter(c => c.hasTransition).length;
       const plan = chooseCandidate(candidates, task, persona, rng, step, null);
@@ -197,7 +199,7 @@ export async function executeMcpNavigationRun(task, persona, iteration, accessTo
         break;
       }
 
-      if (step === (task.max_steps || 5)) {
+      if (step === effectiveMax) {
         completionStatus = "uncertain";
       }
     }

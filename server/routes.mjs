@@ -46,6 +46,7 @@ export function createRouteHandler(deps) {
           id: uid("project"),
           name: payload.name || "Proyecto sin nombre",
           description: payload.description || "",
+          context: payload.context || null,
           created_at: now,
           updated_at: now
         });
@@ -237,6 +238,7 @@ export function createRouteHandler(deps) {
                 ...item,
                 name: payload.name ?? item.name,
                 description: payload.description ?? item.description,
+                context: payload.context !== undefined ? payload.context : item.context,
                 updated_at: new Date().toISOString()
               }
             : item
@@ -438,10 +440,11 @@ export function createRouteHandler(deps) {
           return sendJson(res, 404, { error: "Persona not found" });
         }
 
+        const project = state.projects.find((item) => item.id === task.project_id) || null;
         const runCount = Math.max(1, Math.min(8, Number(payload.runCount) || 1));
         const runs = [];
         for (let index = 0; index < runCount; index += 1) {
-          runs.push(await safeExecuteRun(task, persona, index + 1));
+          runs.push(await safeExecuteRun(task, persona, index + 1, { project }));
         }
         state.runs = [...runs.reverse(), ...state.runs];
         await writeState(state);
@@ -455,9 +458,50 @@ export function createRouteHandler(deps) {
         return sendJson(res, 200, { state });
       }
 
+      if (runMatch && req.method === "PATCH") {
+        const state = await readState();
+        const payload = await readJson(req);
+        if (!payload || typeof payload.feedback !== "object") {
+          return sendJson(res, 400, { error: "feedback object required" });
+        }
+        const allowedTags = ["robotico", "muy optimista", "no entiende el dominio", "perfecto", "comportamiento raro", "muy realista"];
+        const cleanFeedback = {
+          rating: Math.max(1, Math.min(5, Number(payload.feedback.rating) || 0)) || null,
+          tags: Array.isArray(payload.feedback.tags) ? payload.feedback.tags.filter((t) => allowedTags.includes(t)) : [],
+          comment: String(payload.feedback.comment || "").slice(0, 500),
+          rated_at: new Date().toISOString()
+        };
+        state.runs = state.runs.map((item) =>
+          item.id === runMatch[1] ? { ...item, feedback: cleanFeedback } : item
+        );
+        await writeState(state);
+        return sendJson(res, 200, { state });
+      }
+
       if (url.pathname === "/api/skills" && req.method === "GET") {
         const registry = await loadSkillRegistry();
         return sendJson(res, 200, { skills: listSkills(registry) });
+      }
+
+      const analysisMatch = url.pathname.match(/^\/api\/analyses\/([^/]+)$/);
+      if (analysisMatch && req.method === "PATCH") {
+        const state = await readState();
+        const payload = await readJson(req);
+        if (!payload || typeof payload.feedback !== "object") {
+          return sendJson(res, 400, { error: "feedback object required" });
+        }
+        const cleanFeedback = {
+          helpful: typeof payload.feedback.helpful === "boolean" ? payload.feedback.helpful : null,
+          accuracy: Math.max(1, Math.min(5, Number(payload.feedback.accuracy) || 0)) || null,
+          surprised_me: Boolean(payload.feedback.surprised_me),
+          comment: String(payload.feedback.comment || "").slice(0, 500),
+          rated_at: new Date().toISOString()
+        };
+        state.run_analyses = (state.run_analyses || []).map((item) =>
+          item.id === analysisMatch[1] ? { ...item, feedback: cleanFeedback } : item
+        );
+        await writeState(state);
+        return sendJson(res, 200, { state });
       }
 
       const skillRunMatch = url.pathname.match(/^\/api\/skills\/([^/]+)\/run$/);
@@ -480,12 +524,14 @@ export function createRouteHandler(deps) {
         const persona = state.personas.find((p) => p.id === personaId) || null;
         const task = state.tasks.find((t) => t.id === taskId) || null;
         const project = state.projects.find((p) => p.id === (task?.project_id || runs[0].project_id)) || null;
+        const calibrations = (state.calibrations || []).filter((c) => c.persona_id === personaId);
         try {
-          const result = await runSkill(skillName, { runs, persona, task, project }, { provider: payload.provider || undefined });
-          if (url.searchParams.get("persist") === "true" && result.ok) {
+          const result = await runSkill(skillName, { runs, persona, task, project, calibrations }, { provider: payload.provider || undefined });
+          if (result.ok && url.searchParams.get("persist") !== "false") {
             state.run_analyses = state.run_analyses || [];
+            const analysisId = uid("analysis");
             state.run_analyses.unshift({
-              id: uid("analysis"),
+              id: analysisId,
               run_ids: runIds,
               skill: skillName,
               output: result.output,
@@ -495,6 +541,7 @@ export function createRouteHandler(deps) {
               created_at: new Date().toISOString()
             });
             await writeState(state);
+            result.analysis_id = analysisId;
           }
           return sendJson(res, 200, result);
         } catch (error) {

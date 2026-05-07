@@ -15,6 +15,7 @@
           "label": { "type": "string" },
           "detail": { "type": "string" },
           "evidence_step": { "type": "number" },
+          "framework_citation": { "type": "string" },
           "expected_behavior": { "type": "string" }
         }
       }

@@ -213,6 +213,34 @@ function createApi() {
       return next;
     },
 
+    async rateAnalysis(id, feedback) {
+      const runtime = getRuntime();
+      if (runtime.backend) {
+        return (await request(`/api/analyses/${id}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ feedback })
+        })).state;
+      }
+      return null;
+    },
+
+    async rateRun(id, feedback) {
+      const runtime = getRuntime();
+      if (runtime.backend) {
+        return (await request(`/api/runs/${id}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ feedback })
+        })).state;
+      }
+      // local fallback: update in localStorage
+      const state = JSON.parse(localStorage.getItem("sinteticos-lab-state-v2") || "{}");
+      state.runs = (state.runs || []).map((r) => r.id === id ? { ...r, feedback: { ...feedback, rated_at: new Date().toISOString() } } : r);
+      persistLocalState(state);
+      return state;
+    },
+
     async createPersonaConversation(personaId, payload) {
       const runtime = getRuntime();
       if (runtime.backend) {
@@ -326,10 +354,10 @@ function createApi() {
       } catch { return []; }
     },
 
-    async runSkill(skillName, { runIds, provider } = {}) {
+    async runSkill(skillName, { runIds, provider, persona_id, task_id } = {}) {
       return request(`/api/skills/${encodeURIComponent(skillName)}/run`, {
         method: "POST",
-        body: JSON.stringify({ run_ids: runIds, provider })
+        body: JSON.stringify({ run_ids: runIds, provider, persona_id, task_id })
       });
     },
 

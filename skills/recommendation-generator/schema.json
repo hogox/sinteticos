@@ -16,6 +16,7 @@
           "label": { "type": "string" },
           "detail": { "type": "string" },
           "evidence_run_ids": { "type": "array", "items": { "type": "string" } },
+          "framework_citation": { "type": "string" },
           "expected_impact": { "type": "string", "enum": ["high", "medium", "low"] }
         }
       }

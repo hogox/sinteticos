@@ -1,4 +1,4 @@
-import { getState, getUi, getRuntime } from "./store.js";
+import { getState, getUi, getRuntime, getSkillsCache } from "./store.js";
 import {
   escapeHtml,
   formatShortDate,
@@ -97,12 +97,162 @@ export function renderDashboard() {
     metricCard("Consistency score", `${metrics.consistency}%`, "Estabilidad del arquetipo")
   ].join("");
 
+  const qualityMetrics = computeQualityMetrics(state, project.id);
+  const qualityGrid = document.getElementById("quality-metrics-grid");
+  if (qualityGrid) {
+    qualityGrid.innerHTML = [
+      metricCard("Realismo percibido", `${qualityMetrics.realismRate}%`, `${qualityMetrics.ratedRuns} runs calificados (≥ 4★)`),
+      metricCard("Top queja en runs", qualityMetrics.topRunTag || "—", `${qualityMetrics.topRunTagCount} apariciones`),
+      metricCard("Skills útiles", `${qualityMetrics.skillHelpfulRate}%`, `${qualityMetrics.ratedAnalyses} análisis votados`),
+      metricCard("Calibración alta", `${qualityMetrics.calibrationOkRate}%`, "Agreement humano ≥ 80%"),
+      metricCard("Análisis sorpresivos", `${qualityMetrics.surpriseCount}`, "Detectaron algo no obvio"),
+      metricCard("Personas a evolucionar", `${qualityMetrics.personasNeedingEvolve}`, "Con feedback recurrente bajo")
+    ].join("");
+  }
+
   fillSelect("filter-persona", [{ id: "all", name: "Todas" }, ...projectPersonas], ui.filters.personaId, false);
   fillSelect("filter-task", [{ id: "all", prompt: "Todas" }, ...projectTasks], ui.filters.taskId, false, (task) => task.prompt || task.name);
 
   renderRouteList(filteredRuns);
   renderFindingList(filteredRuns);
   drawAggregateVisuals(filteredRuns);
+  renderPromptTunerSection(state, project.id);
+}
+
+function renderPromptTunerSection(state, projectId) {
+  const container = document.getElementById("prompt-tuner-section");
+  if (!container) return;
+  const projectRuns = (state.runs || []).filter((r) => r.project_id === projectId);
+  const negativeRuns = projectRuns.filter((r) => {
+    const tags = r.feedback?.tags || [];
+    const rating = r.feedback?.rating || 0;
+    return rating > 0 && rating <= 2 || tags.some((t) => t === "robotico" || t === "no entiende el dominio" || t === "muy optimista" || t === "comportamiento raro");
+  });
+  const cache = getSkillsCache();
+  const result = cache.tunerResult || null;
+  const tuning = !!cache.tuning;
+
+  let body;
+  if (tuning) {
+    body = `<p class="muted">Analizando ${negativeRuns.length} runs negativos…</p>`;
+  } else if (!result) {
+    body = `<p>Hay <strong>${negativeRuns.length}</strong> runs con feedback negativo en este proyecto. Si tenés al menos 5, podés ejecutar <code>prompt-tuner</code> para que proponga edits al system prompt de vision.</p>`;
+  } else if (!result.ok) {
+    body = `<p class="error">Error: ${escapeHtml(result.error || "desconocido")}</p>`;
+  } else {
+    body = renderTunerResult(result);
+  }
+
+  container.innerHTML = `
+    <article class="panel prompt-tuner-panel">
+      <div class="panel-header">
+        <div>
+          <p class="eyebrow">Mejora del prompt</p>
+          <h3>Tuning desde feedback</h3>
+        </div>
+        <div class="panel-actions">
+          <button type="button" data-tune-prompt="${projectId}" ${tuning || negativeRuns.length < 5 ? "disabled" : ""}>
+            ${result ? "Volver a analizar" : "Analizar runs negativos"}
+          </button>
+        </div>
+      </div>
+      ${body}
+    </article>
+  `;
+}
+
+function renderTunerResult(result) {
+  const out = result.output || {};
+  const verdict = out.verdict || "edits_proposed";
+  const verdictLabel = {
+    edits_proposed: "Edits propuestos",
+    insufficient_data: "Datos insuficientes",
+    prompt_well_calibrated: "Prompt bien calibrado"
+  }[verdict] || verdict;
+
+  const themes = (out.themes_observed || []).map((t) => `
+    <li><strong>${escapeHtml(t.tag)}</strong> · ${t.frequency} apariciones${t.example_quotes?.length ? `<br><em>${t.example_quotes.slice(0, 2).map((q) => escapeHtml(q)).join(" / ")}</em>` : ""}</li>
+  `).join("");
+
+  const edits = (out.proposed_edits || []).map((edit, idx) => `
+    <article class="tuner-edit">
+      <header>
+        <span class="pill">${escapeHtml(edit.edit_type)}</span>
+        <span class="pill">${escapeHtml(edit.target)}</span>
+        ${edit.evidence_runs?.length ? `<span class="pill">${edit.evidence_runs.length} runs</span>` : ""}
+      </header>
+      ${edit.current_text ? `<div class="tuner-edit__current"><p class="eyebrow">Texto actual (aproximado)</p><pre>${escapeHtml(edit.current_text)}</pre></div>` : ""}
+      <div class="tuner-edit__proposed"><p class="eyebrow">Texto propuesto</p><pre>${escapeHtml(edit.proposed_text || "")}</pre></div>
+      <p class="tuner-rationale"><strong>Razón:</strong> ${escapeHtml(edit.rationale || "")}</p>
+      ${edit.expected_outcome ? `<p class="tuner-impact"><strong>Resultado esperado:</strong> ${escapeHtml(edit.expected_outcome)}</p>` : ""}
+      <button type="button" class="ghost-button" data-copy-tuner-edit="${idx}">Copiar texto propuesto</button>
+    </article>
+  `).join("");
+
+  const nextActions = (out.next_actions || []).map((a) => `<li>${escapeHtml(a)}</li>`).join("");
+
+  return `
+    <div class="tuner-verdict tuner-verdict--${verdict}">
+      <strong>${escapeHtml(verdictLabel)}</strong>
+      <p>${escapeHtml(out.summary || "")}</p>
+    </div>
+    ${themes ? `<div class="tuner-themes"><p class="eyebrow">Temas observados</p><ul>${themes}</ul></div>` : ""}
+    ${edits ? `<div class="tuner-edits">${edits}</div>` : ""}
+    ${nextActions ? `<div class="tuner-next"><p class="eyebrow">Próximos pasos</p><ul>${nextActions}</ul></div>` : ""}
+    <p class="muted small">Estos cambios deben aplicarse manualmente en <code>server/vision.mjs</code> (función <code>buildSystemPrompt</code>) por un developer.</p>
+  `;
+}
+
+function computeQualityMetrics(state, projectId) {
+  const projectRuns = (state.runs || []).filter((r) => r.project_id === projectId);
+  const ratedRuns = projectRuns.filter((r) => r.feedback?.rating);
+  const realismCount = projectRuns.filter((r) => (r.feedback?.rating || 0) >= 4).length;
+  const realismRate = ratedRuns.length ? Math.round((realismCount / ratedRuns.length) * 100) : 0;
+
+  const tagCounts = {};
+  ratedRuns.forEach((r) => {
+    (r.feedback?.tags || []).forEach((t) => {
+      if (t === "muy realista" || t === "perfecto") return;
+      tagCounts[t] = (tagCounts[t] || 0) + 1;
+    });
+  });
+  const topRunTagEntry = Object.entries(tagCounts).sort((a, b) => b[1] - a[1])[0];
+  const topRunTag = topRunTagEntry?.[0] || null;
+  const topRunTagCount = topRunTagEntry?.[1] || 0;
+
+  const projectRunIds = new Set(projectRuns.map((r) => r.id));
+  const projectAnalyses = (state.run_analyses || []).filter((a) =>
+    (a.run_ids || []).some((id) => projectRunIds.has(id))
+  );
+  const ratedAnalyses = projectAnalyses.filter((a) => a.feedback?.helpful !== undefined && a.feedback?.helpful !== null);
+  const helpfulCount = ratedAnalyses.filter((a) => a.feedback?.helpful).length;
+  const skillHelpfulRate = ratedAnalyses.length ? Math.round((helpfulCount / ratedAnalyses.length) * 100) : 0;
+  const surpriseCount = projectAnalyses.filter((a) => a.feedback?.surprised_me).length;
+
+  const projectCalibrations = (state.calibrations || []).filter((c) => c.project_id === projectId);
+  const calibrationOk = projectCalibrations.filter((c) => (c.agreement || 0) >= 80).length;
+  const calibrationOkRate = projectCalibrations.length ? Math.round((calibrationOk / projectCalibrations.length) * 100) : 0;
+
+  // Personas needing evolution: ≥ 2 calibrations < 70 OR ≥ 3 runs rated ≤ 2
+  const personaIds = new Set(projectRuns.map((r) => r.persona_id));
+  let personasNeedingEvolve = 0;
+  personaIds.forEach((pid) => {
+    const lowCalibs = projectCalibrations.filter((c) => c.persona_id === pid && (c.agreement || 100) < 70).length;
+    const lowRuns = projectRuns.filter((r) => r.persona_id === pid && (r.feedback?.rating || 5) <= 2).length;
+    if (lowCalibs >= 2 || lowRuns >= 3) personasNeedingEvolve += 1;
+  });
+
+  return {
+    ratedRuns: ratedRuns.length,
+    realismRate,
+    topRunTag,
+    topRunTagCount,
+    ratedAnalyses: ratedAnalyses.length,
+    skillHelpfulRate,
+    surpriseCount,
+    calibrationOkRate,
+    personasNeedingEvolve
+  };
 }
 
 export function renderRouteList(runs) {

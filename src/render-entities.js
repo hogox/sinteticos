@@ -13,7 +13,8 @@ import {
   severityToClass
 } from "./utils.js";
 import { fillSelect, toggleFormDisabled, resetProjectForm, resetPersonaForm, resetTaskForm } from "./forms.js";
-import { observedDetailHtml, inferredDetailHtml, predictiveDetailHtml, drawRunObserved, drawPredictiveCanvas, skillAnalysisHtml, skillBatchHtml } from "./render-detail.js";
+import { observedDetailHtml, inferredDetailHtml, predictiveDetailHtml, drawRunObserved, drawPredictiveCanvas } from "./render-detail.js";
+import { renderSkillsSection } from "./render-skills-drawer.js";
 
 const PROJECT_COLORS = ["#2563eb", "#7c3aed", "#0891b2", "#059669", "#d97706", "#dc2626", "#db2777", "#65a30d"];
 
@@ -23,7 +24,7 @@ function taskStatusLabel(status) {
 
 function taskCapabilityPills(task) {
   return [
-    `<span class="pill">Hasta ${task.max_steps} pasos</span>`,
+    task.max_steps ? `<span class="pill">Hasta ${task.max_steps} pasos</span>` : `<span class="pill">Sin límite de pasos</span>`,
     task.mcp_enabled ? '<span class="pill">Con apoyo MCP</span>' : "",
     task.predictive_attention_enabled ? '<span class="pill">Atencion estimada</span>' : "",
     task.artifacts_enabled ? '<span class="pill">Guarda evidencia</span>' : ""
@@ -201,24 +202,26 @@ export function renderRuns() {
       const persona = getPersonaById(run.persona_id, state);
       const task = getTaskById(run.task_id, state);
       const selected = run.id === ui.selectedRunId ? " is-selected" : "";
+      const steps = run.step_log || [];
+      const lastScreen = steps.length ? steps[steps.length - 1].screen : null;
+      const stepsCount = steps.length;
       return `
         <article class="list-card${selected}" data-run-id="${run.id}">
           <div class="run-headline">
             <div>
               <strong>${persona ? escapeHtml(persona.name) : "Persona eliminada"}</strong>
-              <p>${task ? escapeHtml(labelTaskType(task.type)) : "Tarea"} · ${task ? escapeHtml(task.prompt.slice(0, 40)) : "sin tarea"}</p>
+              <p>${task ? escapeHtml(task.prompt.slice(0, 80)) : "sin tarea"}${task && task.prompt.length > 80 ? "…" : ""}</p>
             </div>
             <span class="status-pill ${statusClass(run.completion_status)}">${escapeHtml(run.completion_status)}</span>
           </div>
+          <div class="run-card-summary-line">
+            ${stepsCount} ${stepsCount === 1 ? "paso" : "pasos"}${lastScreen ? ` · terminó en <em>${escapeHtml(lastScreen.slice(0, 40))}</em>` : ""}
+          </div>
+          <p class="run-card-summary">${escapeHtml(run.report_summary)}</p>
           <div class="meta-row">
-            <span class="pill">seed ${run.seed}</span>
-            <span class="pill">${run.persona_version}</span>
             <span class="pill">${formatShortDate(run.started_at)}</span>
             <span class="pill">${escapeHtml(run.engine || "simulated")}</span>
-          </div>
-          <p>${escapeHtml(run.report_summary)}</p>
-          <div class="action-row">
-            <button class="danger-button" data-run-action="delete" data-id="${run.id}">Borrar run</button>
+            <button class="danger-button" data-run-action="delete" data-id="${run.id}">Borrar</button>
           </div>
         </article>
       `;
@@ -228,9 +231,6 @@ export function renderRuns() {
     ? runsHtml || emptyStateMarkup("Todavia no hay corridas en este proyecto.")
     : emptyStateMarkup("Primero crea o selecciona un proyecto para ejecutar runs.");
   toggleFormDisabled("run-form", Boolean(projectId));
-
-  const batchPanel = document.getElementById("run-batch-panel");
-  if (batchPanel) batchPanel.innerHTML = skillBatchHtml(runs);
 
   document.querySelectorAll("[data-detail-view]").forEach((button) =>
     button.classList.toggle("is-active", button.dataset.detailView === ui.runDetailView)
@@ -243,6 +243,7 @@ export function renderRuns() {
   if (!run) {
     title.textContent = "Selecciona una corrida";
     detail.innerHTML = emptyStateMarkup("No hay detalle disponible.");
+    renderSkillsSection();
     return;
   }
 
@@ -250,21 +251,39 @@ export function renderRuns() {
   const task = getTaskById(run.task_id, state);
   title.textContent = `${persona ? persona.name : "Persona"} · ${task ? labelTaskType(task.type) : "run"}`;
 
-  const skillPanel = skillAnalysisHtml(run);
-
   if (ui.runDetailView === "observed") {
-    detail.innerHTML = observedDetailHtml(run) + skillPanel;
+    detail.innerHTML = observedDetailHtml(run) + runFeedbackHtml(run);
     drawRunObserved(run);
-    return;
-  }
-
-  if (ui.runDetailView === "predictive") {
-    detail.innerHTML = predictiveDetailHtml(run, task) + skillPanel;
+  } else if (ui.runDetailView === "predictive") {
+    detail.innerHTML = predictiveDetailHtml(run, task) + runFeedbackHtml(run);
     drawPredictiveCanvas(run);
-    return;
+  } else {
+    detail.innerHTML = inferredDetailHtml(run, persona, task) + runFeedbackHtml(run);
   }
 
-  detail.innerHTML = inferredDetailHtml(run, persona, task) + skillPanel;
+  renderSkillsSection();
+}
+
+function runFeedbackHtml(run) {
+  const fb = run.feedback || {};
+  const rating = fb.rating || 0;
+  const tags = Array.isArray(fb.tags) ? fb.tags : [];
+  const allTags = ["robotico", "no entiende el dominio", "muy optimista", "comportamiento raro", "muy realista", "perfecto"];
+  const stars = [1, 2, 3, 4, 5].map((n) =>
+    `<button type="button" class="rating-star ${n <= rating ? "is-active" : ""}" data-rate-run="${run.id}" data-rating="${n}" aria-label="${n} estrella(s)">★</button>`
+  ).join("");
+  const tagButtons = allTags.map((t) =>
+    `<button type="button" class="rating-tag ${tags.includes(t) ? "is-active" : ""}" data-toggle-tag="${run.id}" data-tag="${t}">${t}</button>`
+  ).join("");
+  return `
+    <div class="run-feedback-panel" data-run-id="${run.id}">
+      <h4>¿Qué tan realista te pareció este run?</h4>
+      <div class="rating-stars" role="radiogroup" aria-label="Rating">${stars}</div>
+      <div class="rating-tags">${tagButtons}</div>
+      <textarea class="rating-comment" data-comment-run="${run.id}" placeholder="Comentario libre (opcional)" rows="2">${fb.comment || ""}</textarea>
+      <div class="rating-meta">${fb.rated_at ? `Última calificación: ${new Date(fb.rated_at).toLocaleString()}` : "Sin calificar todavía"}</div>
+    </div>
+  `;
 }
 
 export function renderCalibration() {

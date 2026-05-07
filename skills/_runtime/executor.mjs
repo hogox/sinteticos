@@ -59,17 +59,38 @@ function pickTaskFields(task) {
   };
 }
 
-function buildUserPayload(skill, { runs, persona, task, project }) {
+function buildUserPayload(skill, { runs, persona, task, project, calibrations }) {
+  const inputs = Array.isArray(skill.inputs) ? skill.inputs : [];
   const payload = {
-    skill: skill.name,
-    task: pickTaskFields(task),
-    persona: pickPersonaFields(persona),
-    project: project ? { id: project.id, name: project.name, description: project.description } : null
+    skill: skill.name
   };
+  if (inputs.includes("task") || skill.batch === false) payload.task = pickTaskFields(task);
+  if (inputs.includes("persona")) payload.persona = pickPersonaFields(persona);
+  if (inputs.includes("project") || project) {
+    payload.project = project ? {
+      id: project.id,
+      name: project.name,
+      description: project.description,
+      context: project.context || null
+    } : null;
+  }
   if (skill.batch) {
     payload.runs = (runs || []).map(pickRunFields).filter(Boolean);
   } else {
     payload.run = pickRunFields(runs?.[0]);
+  }
+  if (inputs.includes("calibrations")) {
+    payload.calibrations = (calibrations || []).map((c) => ({
+      id: c.id,
+      task_id: c.task_id,
+      persona_id: c.persona_id,
+      agreement: c.agreement,
+      human_result: c.human_result,
+      synthetic_result: c.synthetic_result,
+      critical_findings: c.critical_findings,
+      notes: c.notes,
+      created_at: c.created_at
+    }));
   }
   return payload;
 }

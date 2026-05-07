@@ -25,6 +25,62 @@ export function summarizeRun(task, persona, status, findings) {
   return `${persona.name} termino el task ${task.type} como ${status} con una friccion ${severity} centrada en ${findings[0] ? findings[0].label.toLowerCase() : "claridad general"}.`;
 }
 
+function evaluateStepEfficiency(stepLog, screenTransitions, status) {
+  const totalSteps = (stepLog || []).length;
+  if (totalSteps === 0) return null;
+  const backSteps = (stepLog || []).filter((s) => s.action === "back").length;
+  const scrollSteps = (stepLog || []).filter((s) => s.action === "scroll").length;
+  const productiveSteps = Math.max(1, totalSteps - backSteps - scrollSteps);
+  const transitions = (screenTransitions || []).length;
+  const efficiency = transitions > 0 ? transitions / productiveSteps : 0;
+
+  if (status === "completed") {
+    if (totalSteps <= 3 && transitions >= 2) {
+      return {
+        label: "Recorrido muy eficiente",
+        severity: "low",
+        detail: `Completó la tarea en ${totalSteps} paso(s) con ${transitions} transición(es) reales. El flujo principal se entiende rápido y no hay vueltas.`,
+        priority: 30
+      };
+    }
+    if (backSteps >= 2 || (transitions > 0 && efficiency < 0.5)) {
+      return {
+        label: "Recorrido con vueltas innecesarias",
+        severity: "medium",
+        detail: `Completó la tarea en ${totalSteps} paso(s) pero solo ${transitions} fueron transiciones útiles (${backSteps} retroceso(s), ${scrollSteps} scroll(s)). Podría completarse con menos pasos si la navegación principal fuera más clara.`,
+        priority: 60
+      };
+    }
+    if (totalSteps >= 8) {
+      return {
+        label: "Recorrido largo para el objetivo",
+        severity: "medium",
+        detail: `Tomó ${totalSteps} paso(s) para llegar al objetivo. El flujo se siente extendido — vale revisar si hay atajos o pantallas intermedias evitables.`,
+        priority: 55
+      };
+    }
+    return {
+      label: "Recorrido razonable",
+      severity: "low",
+      detail: `${totalSteps} paso(s) / ${transitions} transición(es). El esfuerzo es aceptable pero no destaca como óptimo.`,
+      priority: 25
+    };
+  }
+
+  if (status === "abandoned" || status === "uncertain") {
+    if (totalSteps >= 6 && transitions <= 1) {
+      return {
+        label: "Esfuerzo alto sin avance",
+        severity: "high",
+        detail: `Invirtió ${totalSteps} paso(s) y solo logró ${transitions} transición(es) reales antes de quedar sin certeza. El flujo no entrega progreso visible.`,
+        priority: 65
+      };
+    }
+    return null;
+  }
+  return null;
+}
+
 export function buildFindings(task, persona, status, rng, coverageData = {}) {
   const findings = [
     {
@@ -155,6 +211,10 @@ export function buildFindings(task, persona, status, rng, coverageData = {}) {
       }
     }
   }
+
+  // 3.7 Eficiencia del recorrido: pasos vs. transiciones útiles
+  const efficiencyFinding = evaluateStepEfficiency(stepLog, screenTransitions, status);
+  if (efficiencyFinding) findings.push(efficiencyFinding);
 
   // 3.6 Pantallas sin salida: frames con 0 candidatos conectados
   if (stepLog.length > 0) {

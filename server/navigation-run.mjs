@@ -1,6 +1,6 @@
 import path from "node:path";
 import { promises as fs } from "node:fs";
-import { ARTIFACTS_DIR, BROWSER_HEADLESS } from "./config.mjs";
+import { ARTIFACTS_DIR, BROWSER_HEADLESS, ABSOLUTE_MAX_STEPS } from "./config.mjs";
 import { isFigmaUrl } from "./url-utils.mjs";
 import { uid } from "./utils.mjs";
 import { hashString, mulberry32 } from "../shared/utils.js";
@@ -50,7 +50,8 @@ async function waitForCloudflare(page, extraWaitMs = 1000) {
   }
 }
 
-export async function executeNavigationRun(task, persona, iteration, playwright) {
+export async function executeNavigationRun(task, persona, iteration, playwright, options = {}) {
+  const project = options.project || null;
   if (!playwright) {
     return simulateRun(task, persona, iteration, {
       uid,
@@ -168,7 +169,9 @@ export async function executeNavigationRun(task, persona, iteration, playwright)
     }
     context.interactionFrame = context.interactionFrame || (await getInteractionFrame(page, task));
     context.interactionFrame = await refineFrameByPixelAnalysis(page, context.interactionFrame);
-    const useVision = isVisionAvailable() && (isFigma || task.vision_enabled === true);
+    // Vision is default for web (when API key + not explicitly disabled).
+    // For Figma, vision still requires the existing path.
+    const useVision = isVisionAvailable() && (isFigma || task.vision_enabled !== false);
     // Always clip screenshots to the interaction frame (prototype area only)
     const previousActions = [];
     const clickedTexts = new Set();
@@ -183,7 +186,9 @@ export async function executeNavigationRun(task, persona, iteration, playwright)
       await writeFrameDebugArtifact(runDir, runId, currentScreen, context.interactionFrame, debugArtifacts, page.viewportSize());
     }
 
-    for (let step = 1; step <= task.max_steps; step += 1) {
+    const isUnlimited = task.max_steps == null || task.max_steps === 0;
+    const effectiveMax = isUnlimited ? ABSOLUTE_MAX_STEPS : task.max_steps;
+    for (let step = 1; step <= effectiveMax; step += 1) {
       if (Date.now() >= deadline) {
         completionStatus = "abandoned";
         executionNotes = "El run alcanzo el timeout maximo antes de completar la navegacion.";
@@ -258,24 +263,37 @@ export async function executeNavigationRun(task, persona, iteration, playwright)
           }
           const screenshotBuffer = await page.screenshot(visionScreenshotOpts);
           const visionResult = await analyzeScreenWithVision(screenshotBuffer, {
-            task, persona, step, previousActions
+            task, persona, step, previousActions, runSeed: seed, project
           });
           if (visionResult) {
-            const pageCoords = mapVisionCoordsToPage(visionResult.x, visionResult.y, visionClip);
-            plan = {
-              type: "vision",
-              x: pageCoords.x,
-              y: pageCoords.y,
-              centerX: pageCoords.x,
-              centerY: pageCoords.y,
-              frameX: visionResult.x,
-              frameY: visionResult.y,
-              reason: visionResult.reason,
-              score: visionResult.certainty,
-              screenDescription: visionResult.screenDescription,
-              taskComplete: visionResult.taskComplete
-            };
-            previousActions.push(`Step ${step}: ${visionResult.reason} at (${visionResult.x}, ${visionResult.y})`);
+            if (visionResult.action === "click") {
+              const pageCoords = mapVisionCoordsToPage(visionResult.x, visionResult.y, visionClip);
+              plan = {
+                type: "vision",
+                action: "click",
+                x: pageCoords.x,
+                y: pageCoords.y,
+                centerX: pageCoords.x,
+                centerY: pageCoords.y,
+                frameX: visionResult.x,
+                frameY: visionResult.y,
+                reason: visionResult.reason,
+                score: visionResult.certainty,
+                screenDescription: visionResult.screenDescription,
+                taskComplete: visionResult.taskComplete
+              };
+              previousActions.push(`Paso ${step} (click): ${visionResult.reason}`);
+            } else {
+              plan = {
+                type: "vision",
+                action: visionResult.action,
+                reason: visionResult.reason,
+                score: visionResult.certainty,
+                screenDescription: visionResult.screenDescription,
+                taskComplete: visionResult.taskComplete
+              };
+              previousActions.push(`Paso ${step} (${visionResult.action}): ${visionResult.reason}`);
+            }
           }
         } catch (visionError) {
           console.error("[run] Vision error, falling back to DOM:", visionError.message);
@@ -309,6 +327,85 @@ export async function executeNavigationRun(task, persona, iteration, playwright)
         break;
       }
 
+      // --- Execute plan: click / scroll / back / linger / complete / abandon ---
+      const planAction = plan.action || (plan.type === "candidate" ? "click" : plan.type === "vision" ? "click" : "click");
+      const certainty = Math.max(40, Math.min(92, Math.round(plan.score || 64)));
+      const emotion = plan.emotion || "neutral";
+
+      if (planAction === "abandon") {
+        completionStatus = "abandoned";
+        stepLog.push({
+          step, screen: currentScreen, action: "abandon",
+          reason: plan.reason || "No encontré nada relevante en esta pantalla.",
+          certainty, emotion, timestamp: new Date().toISOString()
+        });
+        await safeCaptureScreenshot(page, runDir, screenshots, currentScreen, step + 1, runId, context.interactionFrame);
+        break;
+      }
+
+      if (planAction === "linger") {
+        stepLog.push({
+          step, screen: currentScreen, action: "linger",
+          reason: plan.reason || "Me quedé mirando, intentando entender la pantalla.",
+          certainty, emotion, timestamp: new Date().toISOString()
+        });
+        await page.waitForTimeout(600);
+        await safeCaptureScreenshot(page, runDir, screenshots, currentScreen, step + 1, runId, context.interactionFrame);
+        if (step === effectiveMax) {
+          completionStatus = "uncertain";
+          if (isUnlimited) executionNotes = `Se alcanzó el cap absoluto de ${ABSOLUTE_MAX_STEPS} pasos.`;
+        }
+        continue;
+      }
+
+      if (planAction === "complete") {
+        completionStatus = "completed";
+        stepLog.push({
+          step, screen: currentScreen, action: "complete",
+          reason: plan.reason || "Llegué a un estado que parece de éxito.",
+          certainty, emotion, timestamp: new Date().toISOString()
+        });
+        await safeCaptureScreenshot(page, runDir, screenshots, currentScreen, step + 1, runId, context.interactionFrame);
+        break;
+      }
+
+      if (planAction === "scroll") {
+        const vp = page.viewportSize();
+        await page.mouse.wheel(0, Math.round((vp?.height || 800) * 0.8));
+        await page.waitForTimeout(700);
+        const scrollScreen = `${currentScreen} (scroll)`;
+        stepLog.push({
+          step, screen: scrollScreen, action: "scroll",
+          reason: plan.reason || "Hago scroll para ver más contenido.",
+          certainty, emotion, timestamp: new Date().toISOString()
+        });
+        await safeCaptureScreenshot(page, runDir, screenshots, scrollScreen, step + 1, runId, context.interactionFrame);
+        if (step === effectiveMax) {
+          completionStatus = "uncertain";
+          if (isUnlimited) executionNotes = `Se alcanzó el cap absoluto de ${ABSOLUTE_MAX_STEPS} pasos.`;
+        }
+        continue;
+      }
+
+      if (planAction === "back") {
+        try { await page.goBack({ waitUntil: "domcontentloaded", timeout: 4000 }); } catch {}
+        await page.waitForTimeout(800);
+        const backScreen = await safeGetScreenLabel(page, step + 1);
+        stepLog.push({
+          step, screen: backScreen, action: "back",
+          reason: plan.reason || "Vuelvo atrás, esta sección no es lo que busco.",
+          certainty, emotion, timestamp: new Date().toISOString()
+        });
+        currentScreen = backScreen;
+        context.currentScreen = currentScreen;
+        await safeCaptureScreenshot(page, runDir, screenshots, currentScreen, step + 1, runId, context.interactionFrame);
+        if (step === effectiveMax) {
+          completionStatus = "uncertain";
+          if (isUnlimited) executionNotes = `Se alcanzó el cap absoluto de ${ABSOLUTE_MAX_STEPS} pasos.`;
+        }
+        continue;
+      }
+
       // --- Click ---
       if (plan.type === "candidate" && plan.text) clickedTexts.add(plan.text);
       await page.mouse.click(plan.centerX || plan.x, plan.centerY || plan.y);
@@ -325,7 +422,6 @@ export async function executeNavigationRun(task, persona, iteration, playwright)
       }
       const nextFingerprint = await safeFingerprintPage(page);
       const nextScreen = plan.screenDescription || await safeGetScreenLabel(page, step + 1);
-      const certainty = Math.max(40, Math.min(92, Math.round(plan.score || 64)));
       const frameRef = activeFrame || context.interactionFrame;
       const point = {
         x: plan.frameX != null
@@ -350,6 +446,7 @@ export async function executeNavigationRun(task, persona, iteration, playwright)
         action: plan.type === "vision" ? "click_vision" : plan.type === "candidate" ? "click_text" : "click_region",
         reason: plan.reason,
         certainty,
+        emotion,
         timestamp: new Date().toISOString()
       });
 
@@ -382,12 +479,13 @@ export async function executeNavigationRun(task, persona, iteration, playwright)
         break;
       }
 
-      if (step === task.max_steps) {
+      if (step === effectiveMax) {
         completionStatus = "uncertain";
+        if (isUnlimited) executionNotes = `Se alcanzó el cap absoluto de ${ABSOLUTE_MAX_STEPS} pasos.`;
       }
     }
 
-    const findings = buildFindings(task, persona, completionStatus, rng);
+    const findings = buildFindings(task, persona, completionStatus, rng, { stepLog, screenTransitions });
     const endedAt = new Date();
 
     let lighthouseData = null;
