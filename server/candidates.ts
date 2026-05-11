@@ -41,7 +41,8 @@ export async function collectCandidates(page, interactionFrame = null, { isFigma
         seen.add(key);
         if (rect.width < 14 || rect.height < 14) return null;
         if (rect.top < -8 || rect.left < -8) return null;
-        if (rect.bottom > window.innerHeight + 32 || rect.right > window.innerWidth + 32) return null;
+        const maxBottom = isFigmaRun ? window.innerHeight + 32 : window.innerHeight * 2 + 32;
+        if (rect.bottom > maxBottom || rect.right > window.innerWidth + 32) return null;
         if (rect.width > window.innerWidth * 0.96) return null;
         if (isFigmaRun && rect.height > 180) return null;
         if (text.length > 90) return null;
@@ -61,6 +62,8 @@ export async function collectCandidates(page, interactionFrame = null, { isFigma
             return null;
           }
         }
+        const scrollY = window.scrollY || 0;
+        const belowFold = rect.top > window.innerHeight;
         return {
           text,
           isRestart: /restart/i.test(text),
@@ -70,7 +73,9 @@ export async function collectCandidates(page, interactionFrame = null, { isFigma
           width: rect.width,
           height: rect.height,
           centerX: rect.x + rect.width / 2,
-          centerY: rect.y + rect.height / 2
+          centerY: rect.y + rect.height / 2,
+          absoluteTop: rect.top + scrollY,
+          belowFold
         };
       })
       .filter(Boolean)

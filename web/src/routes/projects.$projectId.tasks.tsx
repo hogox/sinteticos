@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
-import { useAppState, useDeleteTask } from "@/api/queries";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useAppState, useDeleteTask, useExecuteRun } from "@/api/queries";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import {
@@ -70,6 +70,7 @@ function TasksPage() {
                 key={task.id}
                 task={task}
                 personaName={persona?.name || "Sin persona"}
+                projectId={projectId}
                 onEdit={() => setEditingTask(task)}
               />
             );
@@ -99,13 +100,23 @@ function TasksPage() {
 interface CardProps {
   task: Task;
   personaName: string;
+  projectId: string;
   onEdit: () => void;
 }
 
-function TaskCard({ task, personaName, onEdit }: CardProps) {
+function TaskCard({ task, personaName, projectId, onEdit }: CardProps) {
   const del = useDeleteTask();
+  const execute = useExecuteRun();
+  const navigate = useNavigate();
+  const [runCount, setRunCount] = useState(1);
+
   const onDelete = () => {
     if (confirm("¿Eliminar esta tarea?")) del.mutate(task.id);
+  };
+
+  const onRun = async () => {
+    await execute.mutateAsync({ taskId: task.id, runCount });
+    navigate({ to: "/projects/$projectId/runs", params: { projectId } });
   };
 
   return (
@@ -132,14 +143,39 @@ function TaskCard({ task, personaName, onEdit }: CardProps) {
         {task.mcp_enabled && <Badge variant="outline">MCP</Badge>}
         {task.predictive_attention_enabled && <Badge variant="outline">Atención estimada</Badge>}
       </div>
-      <div className="flex gap-2">
-        <Button variant="outline" size="sm" onClick={onEdit}>
-          Editar
+      <div className="flex items-center gap-2">
+        <Button
+          size="sm"
+          onClick={onRun}
+          disabled={execute.isPending}
+          className="flex-shrink-0"
+        >
+          {execute.isPending ? "Ejecutando…" : "▶ Ejecutar"}
         </Button>
-        <Button variant="ghost" size="sm" onClick={onDelete}>
-          Eliminar
-        </Button>
+        <select
+          value={runCount}
+          onChange={(e) => setRunCount(Number(e.target.value))}
+          disabled={execute.isPending}
+          className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+        >
+          {[1, 2, 3, 5, 8].map((n) => (
+            <option key={n} value={n}>{n} {n === 1 ? "run" : "runs"}</option>
+          ))}
+        </select>
+        <div className="flex gap-1 ml-auto">
+          <Button variant="outline" size="sm" onClick={onEdit}>
+            Editar
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onDelete}>
+            Eliminar
+          </Button>
+        </div>
       </div>
+      {execute.isError && (
+        <p className="text-xs text-destructive mt-2">
+          {(execute.error as Error).message}
+        </p>
+      )}
     </div>
   );
 }

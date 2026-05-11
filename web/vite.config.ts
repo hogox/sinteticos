@@ -23,6 +23,10 @@ export default defineConfig({
       "/artifacts": {
         target: "http://localhost:8787",
         changeOrigin: true
+      },
+      "/avatars": {
+        target: "http://localhost:8787",
+        changeOrigin: true
       }
     }
   }

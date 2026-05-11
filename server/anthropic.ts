@@ -7,6 +7,9 @@ const MAX_TOKENS = 8192;
 const PERSONA_FIELD_DESCRIPTIONS = {
   name: "Nombre completo y plausible (no genérico).",
   description: "Resumen de 1-2 frases del arquetipo.",
+  age: "Edad o rango de edad (e.g. '34', '35-45 años').",
+  gender: "Género o sexo (e.g. 'Mujer', 'Hombre', 'No binario').",
+  life_context: "Contexto vital y familiar: estado civil, hijos, rol familiar, etapa de vida (e.g. 'Madre de 2 hijos, casada', 'Soltero, vive solo', 'Abuelo jubilado', 'Estudiante universitaria').",
   role: "Rol u ocupación principal.",
   segment: "Segmento de mercado o demográfico al que pertenece.",
   functional_context: "Contexto funcional: qué hace, dónde, con qué fin.",

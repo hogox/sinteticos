@@ -13,6 +13,9 @@ interface ChatPersona {
   id?: string;
   name?: string;
   description?: string;
+  age?: string;
+  gender?: string;
+  life_context?: string;
   usage_context?: string;
   goals?: string;
   needs?: string;
@@ -143,7 +146,9 @@ function summarizeRun(run: ChatRun | null, tasks: ChatTask[] | undefined): strin
 }
 
 function inferFromPersona(persona: ChatPersona): string[] {
+  const demographicParts = [persona.age, persona.gender, persona.life_context].filter(Boolean);
   return [
+    demographicParts.length ? `tengo ${demographicParts.join(", ")}` : "",
     descriptionFragment(persona.description),
     persona.usage_context ? `suelo resolver esto en momentos como ${cleanSentence(persona.usage_context).toLowerCase()}` : "",
     persona.goals ? `quiero ${cleanSentence(persona.goals).toLowerCase()}` : "",
