@@ -108,6 +108,15 @@ export const useDeleteTask = () => useStateMutation<string>(api.deleteTask);
 
 export const useCreateCalibration = () => useStateMutation<CalibrationInput>(api.createCalibration);
 
+export function useExecuteRun() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ taskId, runCount }: { taskId: string; runCount?: number }) =>
+      api.executeRun(taskId, runCount),
+    onSuccess: (state) => setStateCache(qc, state)
+  });
+}
+
 export function useRateRun() {
   const qc = useQueryClient();
   return useMutation({

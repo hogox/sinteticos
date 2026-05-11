@@ -2,6 +2,9 @@ interface ChatPersona {
     id?: string;
     name?: string;
     description?: string;
+    age?: string;
+    gender?: string;
+    life_context?: string;
     usage_context?: string;
     goals?: string;
     needs?: string;

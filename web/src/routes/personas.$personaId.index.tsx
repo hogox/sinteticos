@@ -25,6 +25,14 @@ function PerfilTab() {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div className="rounded-lg border border-border bg-card p-5 space-y-3">
+        <h3 className="font-semibold">Demografía</h3>
+        <FieldBlock label="Edad" value={persona.age} />
+        <FieldBlock label="Género" value={persona.gender} />
+        <FieldBlock label="Contexto vital" value={persona.life_context} />
+        <FieldBlock label="Segmento" value={persona.segment} />
+      </div>
+
+      <div className="rounded-lg border border-border bg-card p-5 space-y-3">
         <h3 className="font-semibold">Contexto</h3>
         <FieldBlock label="Contexto funcional" value={persona.functional_context} />
         <FieldBlock label="Contexto de uso" value={persona.usage_context} />

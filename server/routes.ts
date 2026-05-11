@@ -1,4 +1,5 @@
 import path from "node:path";
+import fs from "node:fs/promises";
 import { PROJECT_ROOT } from "./config.ts";
 import { checkFigmaAvailability } from "../figma-mcp-client.ts";
 import { generatePersonas, extractPersonas, generatePersonaChatReply } from "./anthropic.ts";
@@ -221,6 +222,8 @@ export function createRouteHandler(deps) {
 
       const projectMatch = url.pathname.match(/^\/api\/projects\/([^/]+)$/);
       const personaMatch = url.pathname.match(/^\/api\/personas\/([^/]+)$/);
+      const personaAvatarMatch = url.pathname.match(/^\/api\/personas\/([^/]+)\/avatar$/);
+      const personaAvatarRandomMatch = url.pathname.match(/^\/api\/personas\/([^/]+)\/avatar\/random$/);
       const personaDuplicateMatch = url.pathname.match(/^\/api\/personas\/([^/]+)\/duplicate$/);
       const personaArchiveMatch = url.pathname.match(/^\/api\/personas\/([^/]+)\/archive$/);
       const personaConversationsMatch = url.pathname.match(/^\/api\/personas\/([^/]+)\/conversations$/);
@@ -278,6 +281,57 @@ export function createRouteHandler(deps) {
         const state = await readState();
         state.personas = state.personas.filter((item) => item.id !== personaMatch[1]);
         state.persona_conversations = (state.persona_conversations || []).filter((item) => item.persona_id !== personaMatch[1]);
+        await writeState(state);
+        return sendJson(res, 200, { state });
+      }
+
+      if (personaAvatarMatch && req.method === "POST") {
+        const personaId = personaAvatarMatch[1];
+        const avatarsDir = path.join(PROJECT_ROOT, "data", "avatars");
+        await fs.mkdir(avatarsDir, { recursive: true });
+        const { files } = await parseMultipart(req);
+        const file = files[0];
+        if (!file) return sendJson(res, 400, { error: "No se recibió ningún archivo." });
+        const allowed = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+        if (!allowed.includes(file.mimetype)) return sendJson(res, 400, { error: "Solo se permiten imágenes (jpg, png, webp, gif)." });
+        const ext = file.mimetype.split("/")[1].replace("jpeg", "jpg");
+        const filename = `${personaId}.${ext}`;
+        await fs.writeFile(path.join(avatarsDir, filename), file.buffer);
+        const avatar_url = `/avatars/${filename}`;
+        const state = await readState();
+        state.personas = state.personas.map((p) =>
+          p.id === personaId ? { ...p, avatar_url, updated_at: new Date().toISOString() } : p
+        );
+        await writeState(state);
+        return sendJson(res, 200, { state });
+      }
+
+      if (personaAvatarRandomMatch && req.method === "POST") {
+        const personaId = personaAvatarRandomMatch[1];
+        const payload = await readJson(req);
+        const genderRaw = String(payload?.gender || "").toLowerCase();
+        const genderParam =
+          genderRaw.includes("mujer") || genderRaw.includes("femen") || genderRaw === "female" ? "female"
+          : genderRaw.includes("hombre") || genderRaw.includes("mascul") || genderRaw === "male" ? "male"
+          : "";
+        const apiUrl = `https://randomuser.me/api/?inc=picture&results=1${genderParam ? `&gender=${genderParam}` : ""}`;
+        const apiRes = await fetch(apiUrl);
+        if (!apiRes.ok) return sendJson(res, 502, { error: "No se pudo contactar randomuser.me" });
+        const apiJson = await apiRes.json() as any;
+        const picUrl: string = apiJson?.results?.[0]?.picture?.large;
+        if (!picUrl) return sendJson(res, 502, { error: "randomuser.me no devolvió imagen." });
+        const imgRes = await fetch(picUrl);
+        if (!imgRes.ok) return sendJson(res, 502, { error: "No se pudo descargar la imagen." });
+        const imgBuffer = Buffer.from(await imgRes.arrayBuffer());
+        const avatarsDir = path.join(PROJECT_ROOT, "data", "avatars");
+        await fs.mkdir(avatarsDir, { recursive: true });
+        const filename = `${personaId}.jpg`;
+        await fs.writeFile(path.join(avatarsDir, filename), imgBuffer);
+        const avatar_url = `/avatars/${filename}`;
+        const state = await readState();
+        state.personas = state.personas.map((p) =>
+          p.id === personaId ? { ...p, avatar_url, updated_at: new Date().toISOString() } : p
+        );
         await writeState(state);
         return sendJson(res, 200, { state });
       }
@@ -552,6 +606,10 @@ export function createRouteHandler(deps) {
 
       if (url.pathname.startsWith("/artifacts/")) {
         return serveFile(res, path.join(PROJECT_ROOT, decodeURIComponent(url.pathname)));
+      }
+
+      if (url.pathname.startsWith("/avatars/")) {
+        return serveFile(res, path.join(PROJECT_ROOT, "data", decodeURIComponent(url.pathname)));
       }
 
       if (url.pathname.startsWith("/src/") || url.pathname.startsWith("/shared/")) {

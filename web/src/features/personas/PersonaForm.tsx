@@ -1,14 +1,21 @@
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { useQueryClient } from "@tanstack/react-query";
 import type { Persona } from "@/types/state";
 import { Input, Textarea, Select, Label } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
-import { useCreatePersona, useUpdatePersona } from "@/api/queries";
+import { useCreatePersona, useUpdatePersona, queryKeys } from "@/api/queries";
+import { api } from "@/api/client";
+import { AvatarPicker } from "./AvatarPicker";
 
 const schema = z.object({
   name: z.string().min(1, "Nombre requerido"),
   description: z.string().optional(),
+  age: z.string().optional(),
+  gender: z.string().optional(),
+  life_context: z.string().optional(),
   role: z.string().optional(),
   segment: z.string().optional(),
   functional_context: z.string().optional(),
@@ -39,16 +46,23 @@ interface Props {
 export function PersonaForm({ persona, onDone }: Props) {
   const create = useCreatePersona();
   const update = useUpdatePersona();
+  const qc = useQueryClient();
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(persona?.avatar_url ?? null);
 
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors, isSubmitting }
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       name: persona?.name || "",
       description: persona?.description || "",
+      age: persona?.age || "",
+      gender: persona?.gender || "",
+      life_context: persona?.life_context || "",
       role: persona?.role || "",
       segment: persona?.segment || "",
       functional_context: persona?.functional_context || "",
@@ -70,17 +84,38 @@ export function PersonaForm({ persona, onDone }: Props) {
     }
   });
 
+  const watchedName = watch("name");
+  const watchedGender = watch("gender");
+
   const onSubmit = handleSubmit(async (values) => {
+    let personaId: string;
     if (persona) {
       await update.mutateAsync({ id: persona.id, payload: values });
+      personaId = persona.id;
     } else {
-      await create.mutateAsync(values);
+      const state = await create.mutateAsync(values);
+      personaId = state.personas[0].id;
+    }
+    if (pendingFile) {
+      const state = await api.uploadAvatar(personaId, pendingFile);
+      qc.setQueryData(queryKeys.state, state);
     }
     onDone();
   });
 
   return (
     <form onSubmit={onSubmit} className="space-y-3">
+      <AvatarPicker
+        name={watchedName || persona?.name || ""}
+        currentUrl={previewUrl}
+        personaId={persona?.id}
+        gender={watchedGender || persona?.gender}
+        onFileSelect={(file, preview) => {
+          setPendingFile(file);
+          setPreviewUrl(preview);
+        }}
+      />
+
       <div className="grid grid-cols-2 gap-3">
         <Label>
           Nombre
@@ -101,16 +136,30 @@ export function PersonaForm({ persona, onDone }: Props) {
         <Textarea rows={2} {...register("description")} />
       </Label>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-3 gap-3">
         <Label>
-          Rol
-          <Input {...register("role")} placeholder="Ej: Profesional comercial" />
+          Edad
+          <Input {...register("age")} placeholder="Ej: 34, 35-45 años" />
         </Label>
         <Label>
-          Segmento
-          <Input {...register("segment")} />
+          Género
+          <Input {...register("gender")} placeholder="Ej: Mujer, Hombre" />
+        </Label>
+        <Label>
+          Rol / profesión
+          <Input {...register("role")} placeholder="Ej: Diseñadora UX" />
         </Label>
       </div>
+
+      <Label>
+        Contexto vital
+        <Input {...register("life_context")} placeholder="Ej: Madre de 2 hijos, casada · Soltero, vive solo · Abuelo jubilado" />
+      </Label>
+
+      <Label>
+        Segmento
+        <Input {...register("segment")} />
+      </Label>
 
       <Label>
         Contexto funcional

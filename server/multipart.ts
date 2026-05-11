@@ -7,11 +7,18 @@ export const MAX_TOTAL_BYTES = 5 * 1024 * 1024; // 5 MB combinados
 export const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5 MB por archivo
 export const MAX_FILES = 10;
 
-/**
- * @param {import("node:http").IncomingMessage} req
- * @returns {Promise<{ files: Array<{filename:string, mimetype:string, buffer:Buffer}>, fields: Record<string,string|string[]> }>}
- */
-export function parseMultipart(req) {
+interface ParsedFile {
+  filename: string;
+  mimetype: string;
+  buffer: Buffer;
+}
+
+interface ParsedMultipart {
+  files: ParsedFile[];
+  fields: Record<string, string | string[]>;
+}
+
+export function parseMultipart(req): Promise<ParsedMultipart> {
   return new Promise((resolve, reject) => {
     const contentType = req.headers["content-type"] || "";
     if (!contentType.includes("multipart/form-data")) {

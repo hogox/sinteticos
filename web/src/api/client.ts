@@ -148,7 +148,29 @@ export const api = {
     request<SkillRunResult>(`/api/skills/${encodeURIComponent(name)}/run`, {
       method: "POST",
       body: JSON.stringify(payload)
-    })
+    }),
+
+  uploadAvatar: async (id: string, file: File): Promise<AppState> => {
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch(`/api/personas/${id}/avatar`, { method: "POST", body: fd });
+    const text = await res.text();
+    const json = text ? JSON.parse(text) : null;
+    if (!res.ok) throw new ApiError(res.status, json?.error || res.statusText, json);
+    return (json as { state: AppState }).state;
+  },
+
+  randomAvatar: (id: string, gender?: string | null): Promise<AppState> =>
+    request<{ state: AppState }>(`/api/personas/${id}/avatar/random`, {
+      method: "POST",
+      body: JSON.stringify({ gender })
+    }).then((r) => r.state),
+
+  executeRun: (taskId: string, runCount = 1): Promise<AppState> =>
+    request<{ state: AppState }>(`/api/tasks/${taskId}/runs`, {
+      method: "POST",
+      body: JSON.stringify({ runCount })
+    }).then((r) => r.state)
 };
 
 export { ApiError };

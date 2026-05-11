@@ -286,8 +286,11 @@ function PreviewList({ preview, onSave, onBack }: PreviewProps) {
               <div className="flex-1 min-w-0">
                 <p className="font-medium">{String(p.name || `Persona ${i + 1}`)}</p>
                 <p className="text-xs text-muted-foreground">
-                  {String(p.role || "Sin rol")} · {String(p.segment || "Sin segmento")}
+                  {[p.age, p.gender, p.role].filter(Boolean).map(String).join(" · ") || String(p.segment || "Sin datos")}
                 </p>
+                {p.life_context ? (
+                  <p className="text-xs text-muted-foreground">{String(p.life_context)}</p>
+                ) : null}
                 <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
                   {String(p.description || p.usage_context || "")}
                 </p>

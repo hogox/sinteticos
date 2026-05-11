@@ -92,7 +92,9 @@ function summarizeRun(run, tasks) {
     ]);
 }
 function inferFromPersona(persona) {
+    const demographicParts = [persona.age, persona.gender, persona.life_context].filter(Boolean);
     return [
+        demographicParts.length ? `tengo ${demographicParts.join(", ")}` : "",
         descriptionFragment(persona.description),
         persona.usage_context ? `suelo resolver esto en momentos como ${cleanSentence(persona.usage_context).toLowerCase()}` : "",
         persona.goals ? `quiero ${cleanSentence(persona.goals).toLowerCase()}` : "",

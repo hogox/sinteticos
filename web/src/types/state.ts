@@ -48,6 +48,10 @@ export interface Persona {
   id: string;
   name: string;
   description: string;
+  age?: string;
+  gender?: string;
+  life_context?: string;
+  avatar_url?: string | null;
   role: string;
   segment: string;
   functional_context?: string;

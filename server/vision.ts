@@ -46,7 +46,7 @@ function buildSystemPrompt() {
     "",
     "Acciones disponibles:",
     "- 'click': hacer click en un elemento. Requiere x, y (pixeles desde el top-left).",
-    "- 'scroll': bajar para ver más contenido.",
+    "- 'scroll': bajar para ver más contenido. Usalo proactivamente en páginas largas — no asumas que lo relevante está arriba del fold.",
     "- 'back': volver atrás cuando entraste a una sección equivocada.",
     "- 'linger': te quedaste mirando esta pantalla intentando entenderla, sin clickear todavía. Usalo cuando hay confusión real o sobrecarga visual.",
     "- 'complete': la tarea ya está cumplida (estado de éxito visible).",
@@ -72,6 +72,7 @@ function buildSystemPrompt() {
     "- Si tu nivel digital es 'high', aguantás certainties bajas siempre que el dominio te interese; abandonás solo cuando es genuinamente irresoluble.",
     "- NO clickees elementos irrelevantes solo porque son llamativos: mejor scroll, linger o back.",
     "- Si la pantalla parece exitosa (confirmación, 'gracias', resumen final) → action='complete'.",
+    "- Si en pasos anteriores del recorrido viste contenido relevante más abajo en la página, podés inferirlo aunque no esté en el viewport actual — usá 'scroll' para volver a él.",
     "- Si ya hiciste scroll y no apareció nada relevante → 'back' o 'abandon' según tu mood."
   ].join("\n");
 }

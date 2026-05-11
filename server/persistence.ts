@@ -51,7 +51,13 @@ export async function serveFile(res, filePath) {
           ? "application/javascript; charset=utf-8"
           : ext === ".png"
             ? "image/png"
-            : "application/octet-stream";
+            : ext === ".jpg" || ext === ".jpeg"
+              ? "image/jpeg"
+              : ext === ".webp"
+                ? "image/webp"
+                : ext === ".gif"
+                  ? "image/gif"
+                  : "application/octet-stream";
   res.writeHead(200, { "Content-Type": type, "Cache-Control": "no-store" });
   res.end(contents);
 }

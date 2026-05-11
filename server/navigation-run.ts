@@ -31,8 +31,59 @@ import {
 import { buildRecoveredErrorRun } from "./error-runs.ts";
 import { simulateRun } from "../shared/simulation.js";
 import { isVisionAvailable, analyzeScreenWithVision, mapVisionCoordsToPage } from "./vision.ts";
+import { waitAndSolveHumanChallenge, detectAndSolveHumanChallenge } from "./human-challenge.ts";
 
 const CLOUDFLARE_RE = /just a moment|managed challenge|un momento|checking your browser|enable javascript and cookies/i;
+
+async function surveyPageScroll(
+  page: any,
+  runDir: string,
+  screenshots: any[],
+  runId: string,
+  currentScreen: string,
+  interactionFrame: any
+): Promise<number> {
+  const pageHeight: number = await page.evaluate(() => document.documentElement.scrollHeight);
+  const vpHeight: number = (page.viewportSize()?.height) || 800;
+  if (pageHeight <= vpHeight * 1.2) return 0;
+
+  const scrollStep = Math.round(vpHeight * 0.75);
+  const maxPositions = 3;
+  let surveyed = 0;
+
+  for (let i = 1; i <= maxPositions; i++) {
+    await page.mouse.wheel(0, scrollStep);
+    await page.waitForTimeout(400);
+
+    const atBottom: boolean = await page.evaluate(
+      () => (window.scrollY + window.innerHeight) >= document.documentElement.scrollHeight - 50
+    );
+
+    const surveyFilename = `survey-${String(i).padStart(2, "0")}.png`;
+    const opts: any = { path: path.join(runDir, surveyFilename), fullPage: false };
+    if (interactionFrame && interactionFrame.confidence > 0.5) {
+      opts.clip = {
+        x: interactionFrame.left, y: interactionFrame.top,
+        width: interactionFrame.width, height: interactionFrame.height
+      };
+    }
+    try {
+      await page.screenshot(opts);
+      screenshots.push({
+        screen: `${currentScreen} (survey-${i})`,
+        step: 0,
+        src: `/artifacts/${runId}/${surveyFilename}`
+      });
+      surveyed++;
+    } catch { /* screenshot fallida no bloquea */ }
+
+    if (atBottom) break;
+  }
+
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.waitForTimeout(300);
+  return surveyed;
+}
 
 async function waitForCloudflare(page, extraWaitMs = 1000) {
   try {
@@ -135,6 +186,11 @@ export async function executeNavigationRun(task: any, persona: any, iteration: n
       }
       // Wait for any Cloudflare challenge on the initial page load to auto-resolve
       await waitForCloudflare(page, timing.initialWaitMs);
+      // Also handle interactive challenges (Turnstile checkbox, hCaptcha, reCAPTCHA)
+      const initialChallenge = await waitAndSolveHumanChallenge(page, 10000);
+      if (initialChallenge.found) {
+        await waitForCloudflare(page, 1500);
+      }
     }
     let initialSurface = isFigma
       ? await settleFigmaSurface(page, deadline, timing, task)
@@ -185,6 +241,16 @@ export async function executeNavigationRun(task: any, persona: any, iteration: n
     await safeCaptureScreenshot(page, runDir, screenshots, currentScreen, 1, runId, context.interactionFrame);
     if (context.interactionFrame) {
       await writeFrameDebugArtifact(runDir, runId, currentScreen, context.interactionFrame, debugArtifacts, page.viewportSize());
+    }
+
+    // Survey inicial: scrollear toda la página para ver contenido below-the-fold antes de interactuar
+    if (!isFigma) {
+      const surveyCount = await surveyPageScroll(page, runDir, screenshots, runId, currentScreen, context.interactionFrame);
+      if (surveyCount > 0) {
+        previousActions.push(
+          `[Exploración previa] Recorrí la página con scroll y vi ${surveyCount} posición(es) adicional(es) de contenido below-the-fold antes de interactuar.`
+        );
+      }
     }
 
     const isUnlimited = task.max_steps == null || task.max_steps === 0;
@@ -409,7 +475,18 @@ export async function executeNavigationRun(task: any, persona: any, iteration: n
 
       // --- Click ---
       if (plan.type === "candidate" && plan.text) clickedTexts.add(plan.text);
-      await page.mouse.click(plan.centerX || plan.x, plan.centerY || plan.y);
+
+      // Si el candidato elegido está below-the-fold, scrollear hasta él antes de clickear
+      let clickX = plan.centerX || plan.x;
+      let clickY = plan.centerY || plan.y;
+      if (!isFigma && plan.belowFold && plan.absoluteTop != null) {
+        const vpH: number = page.viewportSize()?.height || 800;
+        const targetScrollY = Math.max(0, plan.absoluteTop - Math.round(vpH * 0.35));
+        await page.evaluate((y: number) => window.scrollTo({ top: y, behavior: "instant" }), targetScrollY);
+        await page.waitForTimeout(350);
+        clickY = plan.absoluteTop + (plan.height || 0) / 2 - targetScrollY;
+      }
+      await page.mouse.click(clickX, clickY);
 
       if (isFigma) {
         await page.waitForTimeout(Math.min(1200, timing.interactiveWaitMs));
@@ -420,6 +497,11 @@ export async function executeNavigationRun(task: any, persona: any, iteration: n
           await page.waitForTimeout(1500);
         }
         await waitForCloudflare(page, 1000);
+        // Check for interactive challenge that may appear after navigation
+        const postClickChallenge = await detectAndSolveHumanChallenge(page);
+        if (postClickChallenge.found) {
+          await waitForCloudflare(page, 1500);
+        }
       }
       const nextFingerprint = await safeFingerprintPage(page);
       const nextScreen = plan.screenDescription || await safeGetScreenLabel(page, step + 1);
@@ -458,6 +540,15 @@ export async function executeNavigationRun(task: any, persona: any, iteration: n
         currentScreen = nextScreen;
         context.currentScreen = currentScreen;
         previousFingerprint = nextFingerprint;
+        // Survey de la nueva página: el agente recorre el contenido antes del próximo paso
+        if (!isFigma) {
+          const surveyCount = await surveyPageScroll(page, runDir, screenshots, runId, currentScreen, context.interactionFrame);
+          if (surveyCount > 0) {
+            previousActions.push(
+              `[Exploración previa] Llegué a "${currentScreen}" y recorrí ${surveyCount} posición(es) de scroll para ver qué hay antes de decidir.`
+            );
+          }
+        }
       } else if (!useVision && step >= 2 && isFigma) {
         completionStatus = "abandoned";
         executionNotes = "La pantalla no cambio despues de intentos repetidos.";

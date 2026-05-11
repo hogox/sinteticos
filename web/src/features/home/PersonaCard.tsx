@@ -21,10 +21,14 @@ export function PersonaCard({ persona, runCount, chatCount }: Props) {
     >
       <div className="flex items-start justify-between mb-3">
         <div
-          className="h-10 w-10 rounded-full text-white text-sm font-semibold flex items-center justify-center"
-          style={{ background: color }}
+          className="h-10 w-10 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center text-white text-sm font-semibold"
+          style={{ background: persona.avatar_url ? "transparent" : color }}
         >
-          {initials}
+          {persona.avatar_url ? (
+            <img src={persona.avatar_url} alt={persona.name} className="h-full w-full object-cover" />
+          ) : (
+            initials
+          )}
         </div>
         <Badge variant={persona.status === "active" ? "success" : "secondary"}>
           {persona.status || "active"}
@@ -32,9 +36,13 @@ export function PersonaCard({ persona, runCount, chatCount }: Props) {
       </div>
 
       <p className="font-semibold leading-tight">{persona.name || "Sin nombre"}</p>
-      <p className="text-xs text-muted-foreground mb-2">
-        {persona.segment || "Sin segmento"} · {persona.role || "Sin rol"}
+      <p className="text-xs text-muted-foreground">
+        {[persona.age, persona.gender, persona.role].filter(Boolean).join(" · ") || "Sin datos"}
       </p>
+      {persona.life_context && (
+        <p className="text-xs text-muted-foreground mb-1">{persona.life_context}</p>
+      )}
+      <p className="text-xs text-muted-foreground mb-2">{persona.segment || ""}</p>
       <p className="text-sm text-muted-foreground line-clamp-2 mb-3">
         {persona.description || persona.usage_context || "Sin descripción"}
       </p>
